@@ -24,6 +24,7 @@ enum qcom_battmgr_variant {
 	QCOM_BATTMGR_SM8350,
 	QCOM_BATTMGR_SM8550,
 	QCOM_BATTMGR_X1E80100,
+	XIAOMI_BATTMGR_SM8550
 };
 
 #define BATTMGR_BAT_STATUS		0x1
@@ -565,12 +566,14 @@ static int qcom_battmgr_bat_get_property(struct power_supply *psy,
 		val->intval = battmgr->status.power_now;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		if (unit != QCOM_BATTMGR_UNIT_mAh)
+		if (unit != QCOM_BATTMGR_UNIT_mAh &&
+			battmgr->variant != XIAOMI_BATTMGR_SM8550)
 			return -ENODATA;
 		val->intval = battmgr->info.design_capacity;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		if (unit != QCOM_BATTMGR_UNIT_mAh)
+		if (unit != QCOM_BATTMGR_UNIT_mAh &&
+			battmgr->variant != XIAOMI_BATTMGR_SM8550)
 			return -ENODATA;
 		val->intval = battmgr->info.last_full_capacity;
 		break;
@@ -1227,7 +1230,8 @@ static void qcom_battmgr_notification(struct qcom_battmgr *battmgr,
 		power_supply_changed(battmgr->wls_psy);
 		break;
 	default:
-		dev_err(battmgr->dev, "unknown notification: %#x\n", notification);
+		if (battmgr->variant != XIAOMI_BATTMGR_SM8550)
+			dev_err(battmgr->dev, "unknown notification: %#x\n", notification);
 		break;
 	}
 }
@@ -1390,6 +1394,14 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 	switch (opcode) {
 	case BATTMGR_BAT_PROPERTY_GET:
 		property = le32_to_cpu(resp->intval.property);
+		if (battmgr->variant == XIAOMI_BATTMGR_SM8550) {
+			/* Xiaomi added BATT_CONSTANT_CURRENT after BATT_CHG_CTRL_LIM_MAX according
+			 * to their code, but it also seems that two properties got removed?
+			 * Fix properties after BATT_CHG_CTRL_LIM_MAX by decreasing property by 1
+			 */
+			if(property > BATT_CHG_CTRL_LIM_MAX)
+				property--;
+		}
 		if (property == BATT_MODEL_NAME) {
 			if (payload_len != sizeof(resp->strval)) {
 				dev_warn(battmgr->dev,
@@ -1441,7 +1453,10 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 			battmgr->info.voltage_max = le32_to_cpu(resp->intval.value);
 			break;
 		case BATT_CURR_NOW:
-			battmgr->status.current_now = le32_to_cpu(resp->intval.value);
+			if (battmgr->variant == XIAOMI_BATTMGR_SM8550)
+				battmgr->status.current_now = -le32_to_cpu(resp->intval.value); /* FG1 + FG2 */
+			else
+				battmgr->status.current_now = le32_to_cpu(resp->intval.value);
 			break;
 		case BATT_TEMP:
 			val = le32_to_cpu(resp->intval.value);
@@ -1484,7 +1499,8 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 			battmgr->info.charge_ctrl_end = le32_to_cpu(resp->intval.value);
 			break;
 		default:
-			dev_warn(battmgr->dev, "unknown property %#x\n", property);
+			if (battmgr->variant != XIAOMI_BATTMGR_SM8550)
+				dev_warn(battmgr->dev, "unknown property %#x\n", property);
 			break;
 		}
 		break;
@@ -1569,7 +1585,8 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 		battmgr->error = 0;
 		break;
 	default:
-		dev_warn(battmgr->dev, "unknown message %#x\n", opcode);
+		if (battmgr->variant != XIAOMI_BATTMGR_SM8550)
+			dev_warn(battmgr->dev, "unknown message %#x\n", opcode);
 		break;
 	}
 
@@ -1624,6 +1641,7 @@ static const struct of_device_id qcom_battmgr_of_variants[] = {
 	{ .compatible = "qcom,sc8280xp-pmic-glink", .data = (void *)QCOM_BATTMGR_SC8280XP },
 	{ .compatible = "qcom,sm8550-pmic-glink", .data = (void *)QCOM_BATTMGR_SM8550 },
 	{ .compatible = "qcom,x1e80100-pmic-glink", .data = (void *)QCOM_BATTMGR_X1E80100 },
+	{ .compatible = "xiaomi,sm8550-pmic-glink", .data = (void *)XIAOMI_BATTMGR_SM8550 },
 	/* Unmatched devices falls back to QCOM_BATTMGR_SM8350 */
 	{}
 };
