@@ -2155,7 +2155,7 @@ out:
 	return ret;
 }
 
-static int cs_dsp_load_coeff(struct cs_dsp *dsp, const struct firmware *firmware,
+int cs_dsp_load_coeff(struct cs_dsp *dsp, const struct firmware *firmware,
 			     const char *file)
 {
 	LIST_HEAD(buf_list);
@@ -2348,6 +2348,7 @@ out_fw:
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(cs_dsp_load_coeff);
 
 static int cs_dsp_create_name(struct cs_dsp *dsp)
 {
