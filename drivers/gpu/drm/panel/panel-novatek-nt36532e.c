@@ -29,6 +29,7 @@
 
 struct panel_info {
 	struct drm_panel panel;
+	struct drm_connector *connector;
 	struct mipi_dsi_device *dsi[2];
 	struct panel_desc *desc;
 	enum drm_panel_orientation orientation;
@@ -61,11 +62,36 @@ static inline struct panel_info *to_panel_info(struct drm_panel *panel)
 	return container_of(panel, struct panel_info, panel);
 }
 
+static int nt36532e_get_current_mode(struct panel_info *pinfo)
+{
+	struct drm_connector *connector = pinfo->connector;
+	struct drm_crtc_state *crtc_state;
+	int i;
+
+	/* Return the default (first) mode if no info available yet */
+	if (!connector->state || !connector->state->crtc)
+		return 0;
+
+	crtc_state = connector->state->crtc->state;
+
+	for (i = 0; i < pinfo->desc->num_modes; i++) {
+		if (drm_mode_match(&crtc_state->mode,
+				   &pinfo->desc->modes[i],
+				   DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK))
+			return i;
+	}
+
+	return 0;
+}
+
 static int sheng_tianma_init_sequence(struct panel_info *pinfo)
 {
 	struct mipi_dsi_device *dsi0 = pinfo->dsi[0];
 	struct device *dev = &dsi0->dev;
 	int ret;
+
+	int cur_mode = nt36532e_get_current_mode(pinfo);
+	int cur_vrefresh = drm_mode_vrefresh(&pinfo->desc->modes[cur_mode]);
 
 	/* NT36532E accepts commands only on DSI0 */
 
@@ -184,13 +210,19 @@ static int sheng_tianma_init_sequence(struct panel_info *pinfo)
 #endif
 
 	mipi_dsi_dcs_write_seq(dsi0, 0x9d, 0x01);
-#ifdef NT36532E_DSC
-	mipi_dsi_dcs_write_seq(dsi0, 0xb2, 0x00);//Framerate ctrl
-	mipi_dsi_dcs_write_seq(dsi0, 0xb3, 0x00);//Framerate ctrl2
-#else
-	mipi_dsi_dcs_write_seq(dsi0, 0xb2, 0x91);//Framerate ctrl
-	mipi_dsi_dcs_write_seq(dsi0, 0xb3, 0x40);//Framerate ctrl2
-#endif
+
+	if (cur_vrefresh == 120 || cur_vrefresh == 60) {
+		mipi_dsi_dcs_write_seq(dsi0, 0xb2, 0x91);//Framerate ctrl
+		mipi_dsi_dcs_write_seq(dsi0, 0xb3, 0x40);//Framerate ctrl2
+	}
+	else if (cur_vrefresh == 90 || cur_vrefresh == 30){
+		mipi_dsi_dcs_write_seq(dsi0, 0xb2, 0x00);
+		mipi_dsi_dcs_write_seq(dsi0, 0xb3, 0x80);
+	}
+	else {
+		mipi_dsi_dcs_write_seq(dsi0, 0xb2, 0x00);
+		mipi_dsi_dcs_write_seq(dsi0, 0xb3, 0x00);
+	}
 
 	ret = mipi_dsi_dcs_exit_sleep_mode(dsi0);
 	if (ret < 0) {
@@ -222,6 +254,54 @@ static const struct drm_display_mode sheng_tianma_modes[] = {
 		.vsync_start = 2032 + 26,
 		.vsync_end = 2032 + 26 + 2,
 		.vtotal = 2032 + 26 + 2 + 138,
+	},
+	{
+		/* 120Hz */
+		.clock = (3048 + 392 + 4 + 92) * (2032 + 26 + 2 + 138) * 120 / 1000,
+		.hdisplay = 3048,
+		.hsync_start = 3048 + 392,
+		.hsync_end = 3048 + 392 + 4,
+		.htotal = 3048 + 392 + 4 + 92,
+		.vdisplay = 2032,
+		.vsync_start = 2032 + 26,
+		.vsync_end = 2032 + 26 + 2,
+		.vtotal = 2032 + 26 + 2 + 138,
+	},
+	{
+		/* 90Hz */
+		.clock = (3048 + 894 + 4 + 92) * (2032 + 26 + 2 + 138) * 90 / 1000,
+		.hdisplay = 3048,
+		.hsync_start = 3048 + 894,
+		.hsync_end = 3048 + 894 + 4,
+		.htotal = 3048 + 894 + 4 + 92,
+		.vdisplay = 2032,
+		.vsync_start = 2032 + 26,
+		.vsync_end = 2032 + 26 + 2,
+		.vtotal = 2032 + 26 + 2 + 138,
+	},
+	{
+		/* 60Hz */
+		.clock = (3048 + 392 + 4 + 92) * (2032 + 2224 + 2 + 138) * 60 / 1000,
+		.hdisplay = 3048,
+		.hsync_start = 3048 + 392,
+		.hsync_end = 3048 + 392 + 4,
+		.htotal = 3048 + 392 + 4 + 92,
+		.vdisplay = 2032,
+		.vsync_start = 2032 + 2224,
+		.vsync_end = 2032 + 2224 + 2,
+		.vtotal = 2032 + 2224 + 2 + 138,
+	},
+	{
+		/* 30Hz */
+		.clock = (3048 + 894 + 4 + 92) * (2032 + 4422 + 2 + 138) * 30 / 1000,
+		.hdisplay = 3048,
+		.hsync_start = 3048 + 894,
+		.hsync_end = 3048 + 894 + 4,
+		.htotal = 3048 + 894 + 4 + 92,
+		.vdisplay = 2032,
+		.vsync_start = 2032 + 4422,
+		.vsync_end = 2032 + 4422 + 2,
+		.vtotal = 2032 + 4422 + 2 + 138,
 	}
 #else
 	{
@@ -398,6 +478,7 @@ static int nt36532e_get_modes(struct drm_panel *panel,
 	connector->display_info.width_mm = pinfo->desc->width_mm;
 	connector->display_info.height_mm = pinfo->desc->height_mm;
 	connector->display_info.bpc = pinfo->desc->bpc;
+	pinfo->connector = connector;
 
 	return pinfo->desc->num_modes;
 }
