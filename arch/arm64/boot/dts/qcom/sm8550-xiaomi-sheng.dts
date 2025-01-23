@@ -786,6 +786,7 @@
 };
 
 &i2c5 {
+	clock-frequency = <1000000>;
 	status = "okay";
 
 	cs35l43_trl: cs35l43@40 {
@@ -850,6 +851,7 @@
 };
 
 &i2c8 {
+	clock-frequency = <1000000>;
 	status = "okay";
 
 	cs35l43_blh: cs35l43@40 {
