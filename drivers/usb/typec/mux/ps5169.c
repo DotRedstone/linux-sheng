@@ -302,6 +302,8 @@ static int ps5169_probe(struct i2c_client *client)
 
 	gpiod_set_value(ps5169->reset_gpio, 0);
 
+	msleep(20);
+
 	ret = ps5169_detect(ps5169);
 	if (ret)
 		goto err_disable_regulator;
