@@ -3281,7 +3281,9 @@
 			power-domains = <&rpmhpd SM8550_MMCX>,
 					<&rpmhpd SM8550_MX>,
 					<&rpmhpd SM8550_MXC>;
-			required-opps = <&rpmhpd_opp_low_svs>;
+			required-opps = <&rpmhpd_opp_low_svs>,
+					<&rpmhpd_opp_low_svs>,
+					<&rpmhpd_opp_low_svs>;
 			#clock-cells = <1>;
 			#reset-cells = <1>;
 			#power-domain-cells = <1>;
