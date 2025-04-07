@@ -1843,6 +1843,8 @@ void ath12k_core_hw_group_set_mlo_capable(struct ath12k_hw_group *ag)
 
 	lockdep_assert_held(&ag->mutex);
 
+	ag->mlo_capable = true;
+
 	/* If more than one devices are grouped, then inter MLO
 	 * functionality can work still independent of whether internally
 	 * each device supports single_chip_mlo or not.
@@ -1858,8 +1860,6 @@ void ath12k_core_hw_group_set_mlo_capable(struct ath12k_hw_group *ag)
 		if (ab->hw_params->def_num_link)
 			return;
 	}
-
-	ag->mlo_capable = true;
 
 	for (i = 0; i < ag->num_devices; i++) {
 		ab = ag->ab[i];
