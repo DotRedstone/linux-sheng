@@ -1156,7 +1156,10 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 			battmgr->info.voltage_max = le32_to_cpu(resp->intval.value);
 			break;
 		case BATT_CURR_NOW:
-			battmgr->status.current_now = le32_to_cpu(resp->intval.value);
+			if (battmgr->variant == XIAOMI_BATTMGR_SM8550)
+				battmgr->status.current_now = -le32_to_cpu(resp->intval.value); /* FG1 + FG2 */
+			else
+				battmgr->status.current_now = le32_to_cpu(resp->intval.value);
 			break;
 		case BATT_TEMP:
 			val = le32_to_cpu(resp->intval.value);
