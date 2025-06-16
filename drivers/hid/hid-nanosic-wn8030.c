@@ -359,7 +359,7 @@ static int nanosic_wn8030_output_report(struct hid_device *hid, u8 *buf, size_t 
 		return -EINVAL;
 
 	if (buf[0] == 0x5)
-		nanosic_wn8030_set_caps_led(nanosic, buf[1] & 0x02);
+		nanosic_wn8030_set_caps_led(nanosic, buf[1]);
 
 	return count;
 }
