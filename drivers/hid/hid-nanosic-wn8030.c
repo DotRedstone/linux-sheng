@@ -349,6 +349,17 @@ static int nanosic_wn8030_set_touchpad(struct nanosic_wn8030 *nanosic, bool enab
 	return regmap_bulk_write(nanosic->regmap, 0x5c, buf, sizeof(buf));
 }
 
+static int nanosic_wn8030_set_kb_power(struct nanosic_wn8030 *nanosic, bool enable)
+{
+	u8 buf[XM_WN8030_I2C_WRITE] = { 0x32, 0x00, 0x4E, 0x31,
+					0x80, 0x38, 0x25, 0x01 };
+
+	buf[8] = enable;
+	buf[9] = nanosic_wn8030_checksum8(&buf[2], 7);
+
+	return regmap_bulk_write(nanosic->regmap, 0x5c, buf, sizeof(buf));
+}
+
 static int nanosic_wn8030_output_report(struct hid_device *hid, u8 *buf, size_t count)
 {
 	struct nanosic_wn8030 *nanosic = hid->driver_data;
@@ -819,6 +830,9 @@ static int nanosic_wn8030_resume(struct device *dev)
 		nanosic->suspended = false;
 		return nanosic_wn8030_load_fw(nanosic);
 	}
+
+	/* Wake up keyboard after MCU exits sleep */
+	nanosic_wn8030_set_kb_power(nanosic, true);
 
 	return 0;
 }
