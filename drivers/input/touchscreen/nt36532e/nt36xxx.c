@@ -1042,7 +1042,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 	for (i = 0; i < ts->max_touch_num; i++) {
 		position = 1 + 0x40 + 0x4c * i;
-		input_id = point_data[position + 32];
+		input_id = i;
 		if (((point_data[position] & 0x07) == 0x01) || ((point_data[position] & 0x07) == 0x02)) {
 #if NVT_SUPER_RESOLUTION_N
 			input_x = (uint32_t)(point_data[position + 9] << 8) + (uint32_t)(point_data[position + 8]);
@@ -1057,9 +1057,6 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 #endif /* #if NVT_SUPER_RESOLUTION_N */
 			input_w = (uint32_t)(point_data[position + 25] << 8) + (uint32_t)(point_data[position + 24]);
 			input_p = (uint32_t)(point_data[position + 59] << 8) + (uint32_t)(point_data[position + 58]);
-			/* Sensetivity is too high! Lower it to match Pad 6S Pro stock firmware. */
-			if (input_p < 300)
-				continue;
 
 			press_id[input_id] = 1;
 			input_mt_slot(ts->input_dev, input_id);
