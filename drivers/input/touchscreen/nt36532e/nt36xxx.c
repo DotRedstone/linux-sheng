@@ -997,12 +997,12 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 	nvt_set_page(0x117700);
 #if NVT_SUPER_RESOLUTION_N
-	ret = CTP_SPI_READ(ts->client, point_data, POINT_DATA_LEN + 1);
+	ret = CTP_SPI_READ(ts->client, point_data, 0x40 + POINT_DATA_LEN + 1);
 #else /* #if NVT_SUPER_RESOLUTION_N */
 	if (ts->pen_support)
-		ret = CTP_SPI_READ(ts->client, point_data, POINT_DATA_LEN + PEN_DATA_LEN + 1);
+		ret = CTP_SPI_READ(ts->client, point_data, 0x40 + POINT_DATA_LEN + PEN_DATA_LEN + 1);
 	else
-		ret = CTP_SPI_READ(ts->client, point_data, POINT_DATA_LEN + 1);
+		ret = CTP_SPI_READ(ts->client, point_data, 0x40 + POINT_DATA_LEN + 1);
 #endif /* #if NVT_SUPER_RESOLUTION_N */
 	nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
 	if (ret < 0) {
