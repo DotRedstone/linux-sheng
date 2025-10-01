@@ -37,16 +37,15 @@
 #define OV02B1B_ANA_GAIN_MAX		248
 #define OV02B1B_ANA_GAIN_DEFAULT	124
 
-/* This reg is dummy, setting it won't do anything. */
-#define OV02B1B_REG_FRAME_LENGTH	CCI_REG16(0x14)
-#define OV02B1B_FRAME_LENGTH_MAX	0x7fff
+#define OV02B1B_REG_VBLANK		CCI_REG16(0x14)
+#define OV02B1B_VBLANK_MAX		0xffff
 
 #define OV02B1B_REG_TEST_PATTERN	CCI_REG8(0x63)
 
-#define OV02B1B_NATIVE_WIDTH		1824U
-#define OV02B1B_NATIVE_HEIGHT		1232U
-#define OV02B1B_PIXEL_ARRAY_LEFT	112U
-#define OV02B1B_PIXEL_ARRAY_TOP		16U
+#define OV02B1B_NATIVE_WIDTH		1608U
+#define OV02B1B_NATIVE_HEIGHT		1208U
+#define OV02B1B_PIXEL_ARRAY_LEFT	4U
+#define OV02B1B_PIXEL_ARRAY_TOP		4U
 #define OV02B1B_PIXEL_ARRAY_WIDTH	1600U
 #define OV02B1B_PIXEL_ARRAY_HEIGHT	1200U
 
@@ -70,6 +69,7 @@ struct ov02b1b_mode {
 	struct v4l2_rect crop;
 	u32 line_length;
 	u32 frame_length;
+	u32 vblank_min;
 	const struct ov02b1b_reg_list reg_list;
 };
 
@@ -217,25 +217,6 @@ static const struct cci_reg_sequence ov02b1b_1600x1200_regs[] = {
 	{ CCI_REG8(0xfb), 0x01 },
 };
 
-#if 0
-static const struct cci_reg_sequence ov02b1b_800x600_regs[] = {
-	{ CCI_REG8(0xfd), 0x00 },
-	{ CCI_REG8(0x28), 0x03 },
-	{ CCI_REG16(0x4f), 0x0320 }, 
-	{ CCI_REG16(0x51), 0x0258 },
-	{ CCI_REG8(0xfd), 0x01 },
-	{ CCI_REG16(0x02), 0x0070 },
-	{ CCI_REG16(0x04), 0x0010 },
-	{ CCI_REG16(0x06), 0x0320 },
-	{ CCI_REG16(0x08), 0x04b0 },
-	{ CCI_REG16(0x16), 0x002c },
-	{ CCI_REG8(0x6c), 0x09 }, /* 2x2 binning */
-	{ CCI_REG8(0xfe), 0x02 },
-	{ CCI_REG8(0xfd), 0x03 },
-	{ CCI_REG8(0xfb), 0x01 },
-};
-#endif
-
 static const struct cci_reg_sequence ov02b1b_streamon_regs[] = {
 	{ CCI_REG8(0xfd), 0x03 },
 	{ CCI_REG8(0xc2), 0x01 },
@@ -275,8 +256,9 @@ static const struct ov02b1b_mode supported_modes[] = {
 			.width = 1600,
 			.height = 1200,
 		},
-		.line_length = 448,
+		.line_length = 448 * 4,
 		.frame_length = 1238,
+		.vblank_min = 20,
 		.reg_list = {
 			.num_of_regs = ARRAY_SIZE(ov02b1b_1600x1200_regs),
 			.regs = ov02b1b_1600x1200_regs,
@@ -497,7 +479,7 @@ static int ov02b1b_set_fmt(struct v4l2_subdev *sd,
 
 		vblank_def = mode->frame_length - mode->height;
 		__v4l2_ctrl_modify_range(ov02b1b->vblank, vblank_def,
-					 OV02B1B_FRAME_LENGTH_MAX - mode->height, 1,
+					 OV02B1B_VBLANK_MAX - mode->height, 1,
 					 vblank_def);
 		__v4l2_ctrl_s_ctrl(ov02b1b->vblank, vblank_def);
 
@@ -591,7 +573,7 @@ static int ov02b1b_set_gain(struct ov02b1b *ov02b1b, int val)
 	return cci_write(ov02b1b->regmap, CCI_REG8(0xfe), 0x02, NULL);
 }
 
-static int ov02b1b_set_frame_length(struct ov02b1b *ov02b1b, int val)
+static int ov02b1b_set_vblank(struct ov02b1b *ov02b1b, int val)
 {
 	int ret;
 
@@ -599,7 +581,7 @@ static int ov02b1b_set_frame_length(struct ov02b1b *ov02b1b, int val)
 	if (ret)
 		return ret;
 
-	ret = cci_write(ov02b1b->regmap, OV02B1B_REG_FRAME_LENGTH, val, NULL);
+	ret = cci_write(ov02b1b->regmap, OV02B1B_REG_VBLANK, val - ov02b1b->cur_mode->vblank_min, NULL);
 	if (ret)
 		return ret;
 
@@ -652,7 +634,7 @@ static int ov02b1b_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = ov02b1b_set_gain(ov02b1b, ctrl->val);
 		break;
 	case V4L2_CID_VBLANK:
-		ret = ov02b1b_set_frame_length(ov02b1b, ov02b1b->cur_mode->height + ctrl->val);
+		ret = ov02b1b_set_vblank(ov02b1b, ctrl->val);
 		break;
 	case V4L2_CID_TEST_PATTERN:
 		ret = ov02b1b_set_test_pattern(ov02b1b, ctrl->val);
@@ -731,7 +713,7 @@ static int ov02b1b_initialize_controls(struct ov02b1b *ov02b1b)
 
 	vblank_def = mode->frame_length - mode->height;
 	ov02b1b->vblank = v4l2_ctrl_new_std(handler, &ov02b1b_ctrl_ops, V4L2_CID_VBLANK, vblank_def,
-			  		    OV02B1B_FRAME_LENGTH_MAX - mode->height, 1, vblank_def);
+			  		    OV02B1B_VBLANK_MAX - mode->height, 1, vblank_def);
 
 	exposure_max = mode->frame_length - OV02B1B_EXPOSURE_MAX_MARGIN;
 	ov02b1b->exposure = v4l2_ctrl_new_std(handler, &ov02b1b_ctrl_ops,
