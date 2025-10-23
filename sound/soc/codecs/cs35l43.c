@@ -59,9 +59,7 @@ static void cs35l43_pm_runtime_setup(struct cs35l43_private *cs35l43);
 static void cs35l43_log_status(struct cs35l43_private *cs35l43);
 static int cs35l43_check_dsp_regs(struct cs35l43_private *cs35l43);
 
-static const DECLARE_TLV_DB_RANGE(dig_vol_tlv,
-		0, 0, TLV_DB_SCALE_ITEM(TLV_DB_GAIN_MUTE, 0, 1),
-		1, 913, TLV_DB_SCALE_ITEM(-10200, 25, 0));
+static const DECLARE_TLV_DB_SCALE(dig_vol_tlv, -10225, 25, true);
 static DECLARE_TLV_DB_SCALE(amp_gain_tlv, 0, 1, 1);
 
 static const struct snd_kcontrol_new amp_enable_ctrl =
@@ -415,9 +413,13 @@ static const struct snd_kcontrol_new cs35l43_aud_controls[] = {
 	SOC_SINGLE("DC Watchdog Duration", CS35L43_ALIVE_DCIN_WD,
 			CS35L43_DCIN_WD_DUR_SHIFT, 0x7, 0),
 	SOC_ENUM("DC Watchdog Mode", cs35l43_dc_wd_mode_enum),
-	SOC_SINGLE_SX_TLV("Digital PCM Volume", CS35L43_AMP_CTRL,
-				CS35L43_AMP_VOL_PCM_SHIFT,
-				0x4CF, 0x391, dig_vol_tlv),
+	/* Ignore bit 0: it is beyond the resolution of TLV_DB_SCALE */
+	SOC_SINGLE_S_TLV("Digital PCM Volume",
+			 CS35L43_AMP_CTRL,
+			 CS35L43_AMP_VOL_PCM_SHIFT + 1,
+			 -409, 48,
+			 (11 - 1) - 1,
+			 0, dig_vol_tlv),
 	SOC_SINGLE_TLV("Amp Gain", CS35L43_AMP_GAIN,
 			CS35L43_AMP_GAIN_PCM_SHIFT, 20, 0,
 			amp_gain_tlv),
