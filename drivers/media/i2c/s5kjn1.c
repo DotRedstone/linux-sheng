@@ -22,9 +22,6 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
-/* These modes only work in Qualcomm downstream kernel. */
-#define ENABLE_BROKEN_MODES		0
-
 /* S5KJN1 follows SMIA++ standard. */
 
 #define S5KJN1_ID			0x38E1
@@ -75,6 +72,8 @@ struct s5kjn1_mode {
 	struct v4l2_rect crop;
 	u32 line_length;
 	u32 frame_length;
+	u32 max_again;
+	u32 again;
 	const struct s5kjn1_reg_list reg_list;
 };
 
@@ -101,6 +100,7 @@ struct s5kjn1 {
 	struct v4l2_ctrl *vblank;
 	struct v4l2_ctrl *hblank;
 	struct v4l2_ctrl *exposure;
+	struct v4l2_ctrl *again;
 
 	const struct s5kjn1_mode *cur_mode;
 };
@@ -150,7 +150,6 @@ static const struct cci_reg_sequence s5kjn1_init_regs[] = {
 	{ CCI_REG16(0x6028), 0x4000 },
 };
 
-#if ENABLE_BROKEN_MODES
 static const struct cci_reg_sequence s5kjn1_8160x6120_regs[] = {
 	{ CCI_REG16(0x6028), 0x2400 },
 	{ CCI_REG16(0x602a), 0x1a28 },
@@ -430,7 +429,6 @@ static const struct cci_reg_sequence s5kjn1_8160x6120_regs[] = {
 	{ CCI_REG16(0x0d04), 0x0002 },
 	{ CCI_REG16(0x6226), 0x0000 },
 };
-#endif
 
 static const struct cci_reg_sequence s5kjn1_4080x3060_regs[] = {
 	{ CCI_REG16(0x6028), 0x2400 },
@@ -992,7 +990,6 @@ static const struct cci_reg_sequence s5kjn1_4080x2296_regs[] = {
 	{ CCI_REG16(0x6226), 0x0000 },
 };
 
-#if ENABLE_BROKEN_MODES
 static const struct cci_reg_sequence s5kjn1_3840x2160_regs[] = {
 	{ CCI_REG16(0x6028), 0x2400 },
 	{ CCI_REG16(0x602a), 0x1a28 },
@@ -1272,7 +1269,6 @@ static const struct cci_reg_sequence s5kjn1_3840x2160_regs[] = {
 	{ CCI_REG16(0x0d04), 0x0102 },
 	{ CCI_REG16(0x6226), 0x0000 },
 };
-#endif
 
 static const char * const s5kjn1_test_pattern_menu[] = {
 	"Disabled",
@@ -1296,7 +1292,6 @@ static u64 to_pixel_rate(u32 f_index)
 }
 
 static const struct s5kjn1_mode supported_modes[] = {
-#if ENABLE_BROKEN_MODES
 	/* 4:3 8k 10fps */
 	{
 		.width = 8160,
@@ -1309,12 +1304,13 @@ static const struct s5kjn1_mode supported_modes[] = {
 		},
 		.line_length = 8688,
 		.frame_length = 6400,
+		.max_again = 512,
+		.again = 256,
 		.reg_list = {
 			.num_of_regs = ARRAY_SIZE(s5kjn1_8160x6120_regs),
 			.regs = s5kjn1_8160x6120_regs,
 		},
 	},
-#endif
 	/* 4:3 4k 30fps */
 	{
 		.width = 4080,
@@ -1327,6 +1323,8 @@ static const struct s5kjn1_mode supported_modes[] = {
 		},
 		.line_length = 5888,
 		.frame_length = 3164,
+		.max_again = S5KJN1_ANA_GAIN_MAX,
+		.again = S5KJN1_ANA_GAIN_DEFAULT,
 		.reg_list = {
 			.num_of_regs = ARRAY_SIZE(s5kjn1_4080x3060_regs),
 			.regs = s5kjn1_4080x3060_regs,
@@ -1344,12 +1342,13 @@ static const struct s5kjn1_mode supported_modes[] = {
 		},
 		.line_length = 5888,
 		.frame_length = 3164,
+		.max_again = S5KJN1_ANA_GAIN_MAX,
+		.again = S5KJN1_ANA_GAIN_DEFAULT,
 		.reg_list = {
 			.num_of_regs = ARRAY_SIZE(s5kjn1_4080x2296_regs),
 			.regs = s5kjn1_4080x2296_regs,
 		},
 	},
-#if ENABLE_BROKEN_MODES
 	/* 16:9 4k 60fps */
 	{
 		.width = 3840,
@@ -1362,12 +1361,13 @@ static const struct s5kjn1_mode supported_modes[] = {
 		},
 		.line_length = 4096,
 		.frame_length = 2274,
+		.max_again = S5KJN1_ANA_GAIN_MAX,
+		.again = S5KJN1_ANA_GAIN_DEFAULT,
 		.reg_list = {
 			.num_of_regs = ARRAY_SIZE(s5kjn1_3840x2160_regs),
 			.regs = s5kjn1_3840x2160_regs,
 		},
 	},
-#endif
 };
 
 static int s5kjn1_check_hwcfg(struct device *dev, struct s5kjn1 *s5kjn1)
@@ -1597,6 +1597,10 @@ static int s5kjn1_set_fmt(struct v4l2_subdev *sd,
 	} else {
 		s5kjn1->cur_mode = mode;
 
+		__v4l2_ctrl_modify_range(s5kjn1->again, S5KJN1_ANA_GAIN_MIN,
+					 mode->max_again, 1,
+					 mode->again);
+
 		vblank_def = mode->frame_length - mode->height;
 		__v4l2_ctrl_modify_range(s5kjn1->vblank, vblank_def,
 					 S5KJN1_FRAME_LENGTH_MAX - mode->height, 1,
@@ -1784,10 +1788,10 @@ static int s5kjn1_initialize_controls(struct s5kjn1 *s5kjn1)
 			  		     1,
 			  		     S5KJN1_EXPOSURE_DEFAULT);
 
-	v4l2_ctrl_new_std(handler, &s5kjn1_ctrl_ops,
+	s5kjn1->again = v4l2_ctrl_new_std(handler, &s5kjn1_ctrl_ops,
 			  V4L2_CID_ANALOGUE_GAIN, S5KJN1_ANA_GAIN_MIN,
-			  S5KJN1_ANA_GAIN_MAX, 1,
-			  S5KJN1_ANA_GAIN_DEFAULT);
+			  mode->max_again, 1,
+			  mode->again);
 
 	v4l2_ctrl_new_std_menu_items(handler, &s5kjn1_ctrl_ops,
 				     V4L2_CID_TEST_PATTERN,
