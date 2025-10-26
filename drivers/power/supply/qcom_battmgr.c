@@ -1715,7 +1715,8 @@ static int qcom_battmgr_probe(struct auxiliary_device *adev,
 			return dev_err_probe(dev, PTR_ERR(battmgr->wls_psy),
 					     "failed to register wireless charing power supply\n");
 	} else {
-		if (battmgr->variant == QCOM_BATTMGR_SM8550)
+		if (battmgr->variant == QCOM_BATTMGR_SM8550 ||
+		    battmgr->variant == XIAOMI_BATTMGR_SM8550)
 			psy_desc = &sm8550_bat_psy_desc;
 		else
 			psy_desc = &sm8350_bat_psy_desc;
@@ -1762,5 +1763,6 @@ static struct auxiliary_driver qcom_battmgr_driver = {
 
 module_auxiliary_driver(qcom_battmgr_driver);
 
+MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Qualcomm PMIC GLINK battery manager driver");
 MODULE_LICENSE("GPL");
