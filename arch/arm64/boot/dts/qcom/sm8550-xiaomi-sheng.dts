@@ -212,9 +212,6 @@
 		pinctrl-0 = <&i2s1_default>;
 		pinctrl-names = "default";
 
-		clocks = <&q6prmcc LPASS_CLK_ID_SEC_MI2S_IBIT LPASS_CLK_ATTRIBUTE_COUPLE_NO>;
-		clock-names = "sec_i2s";
-
 		model = "Xiaomi-Pad6SPro";
 		audio-routing = "IN1_HPHL", "HPHL_OUT",
 				"IN2_HPHR", "HPHR_OUT",
