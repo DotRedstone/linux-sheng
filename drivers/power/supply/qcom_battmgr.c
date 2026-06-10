@@ -143,6 +143,8 @@ enum qcom_battmgr_variant {
 #define XM_BATT_QUICK_CHARGE_TYPE		0x31
 #define XM_BATT_APDO_MAX			0x32
 #define XM_BATT_POWER_MAX			0x33
+#define XM_BATT_PEN_MAC_L			0x53
+#define XM_BATT_PEN_MAC_H			0x54
 #define XM_BATT_PEN_TX_IOUT			0x55
 #define XM_BATT_PEN_TX_VOUT			0x56
 #define XM_BATT_PEN_SOC				0x57
@@ -1332,6 +1334,8 @@ QCOM_BATTMGR_XIAOMI_ATTR_RW(pps_ptf, XM_BATT_PPS_PTF, QCOM_BATTMGR_XIAOMI_DEC);
 QCOM_BATTMGR_XIAOMI_ATTR_WO(fg_fastcharge, XM_BATT_FG_FAST_CHARGE, QCOM_BATTMGR_XIAOMI_DEC);
 QCOM_BATTMGR_XIAOMI_ATTR_RO(apdo_max, XM_BATT_APDO_MAX, QCOM_BATTMGR_XIAOMI_DEC);
 QCOM_BATTMGR_XIAOMI_ATTR_RO(power_max, XM_BATT_POWER_MAX, QCOM_BATTMGR_XIAOMI_DEC);
+QCOM_BATTMGR_XIAOMI_ATTR_RO(pen_mac_l, XM_BATT_PEN_MAC_L, QCOM_BATTMGR_XIAOMI_HEX);
+QCOM_BATTMGR_XIAOMI_ATTR_RO(pen_mac_h, XM_BATT_PEN_MAC_H, QCOM_BATTMGR_XIAOMI_HEX);
 QCOM_BATTMGR_XIAOMI_ATTR_RO(tx_iout, XM_BATT_PEN_TX_IOUT, QCOM_BATTMGR_XIAOMI_DEC);
 QCOM_BATTMGR_XIAOMI_ATTR_RO(tx_vout, XM_BATT_PEN_TX_VOUT, QCOM_BATTMGR_XIAOMI_DEC);
 QCOM_BATTMGR_XIAOMI_ATTR_RO(pen_soc, XM_BATT_PEN_SOC, QCOM_BATTMGR_XIAOMI_DEC);
@@ -1375,6 +1379,8 @@ static struct attribute *qcom_battmgr_xiaomi_attrs[] = {
 	&dev_attr_verify_digest.attr,
 	&qcom_battmgr_xiaomi_attr_apdo_max.dev_attr.attr,
 	&qcom_battmgr_xiaomi_attr_power_max.dev_attr.attr,
+	&qcom_battmgr_xiaomi_attr_pen_mac_l.dev_attr.attr,
+	&qcom_battmgr_xiaomi_attr_pen_mac_h.dev_attr.attr,
 	&qcom_battmgr_xiaomi_attr_tx_iout.dev_attr.attr,
 	&qcom_battmgr_xiaomi_attr_tx_vout.dev_attr.attr,
 	&qcom_battmgr_xiaomi_attr_pen_soc.dev_attr.attr,
