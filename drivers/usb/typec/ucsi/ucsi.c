@@ -1959,8 +1959,8 @@ static void ucsi_unregister_port(struct ucsi_connector *con)
 		mutex_lock(&con->lock);
 		ucsi_unregister_partner(con);
 		/*
-		 * queue delayed items immediately so they can execute
-		 * and free themselves before the wq is destroyed
+		 * Queue delayed items immediately so they can execute
+		 * and free themselves before the workqueue is destroyed.
 		 */
 		list_for_each_entry(uwork, &con->partner_tasks, node) {
 			if (cancel_delayed_work(&uwork->work))
