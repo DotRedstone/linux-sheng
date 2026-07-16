@@ -907,5 +907,6 @@ void Boot_Update_Firmware(struct work_struct *work)
 
 out:
 	mutex_unlock(&ts->lock);
+	nvt_power_supply_restore();
 }
 #endif /* BOOT_UPDATE_FIRMWARE */
