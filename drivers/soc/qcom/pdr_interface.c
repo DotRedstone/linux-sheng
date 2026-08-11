@@ -162,32 +162,75 @@ static void pdr_notifier_work(struct work_struct *work)
 {
 	struct pdr_handle *pdr = container_of(work, struct pdr_handle,
 					      notifier_work);
-	struct pdr_service *pds;
-	int ret;
+	struct pdr_service snapshot;
+	struct pdr_service *pds, *found;
+	char service_path[SERVREG_NAME_LENGTH + 1];
+	bool notify;
+	int state, ret;
 
-	mutex_lock(&pdr->list_lock);
-	list_for_each_entry(pds, &pdr->lookups, node) {
-		if (pds->service_connected) {
-			if (!pds->need_notifier_register)
-				continue;
+	for (;;) {
+		notify = false;
+		found = NULL;
+		memset(&snapshot, 0, sizeof(snapshot));
 
-			pds->need_notifier_register = false;
-			ret = pdr_register_listener(pdr, pds, true);
-			if (ret < 0)
+		mutex_lock(&pdr->list_lock);
+		list_for_each_entry(pds, &pdr->lookups, node) {
+			if (pds->service_connected &&
+			    pds->need_notifier_register) {
+				pds->need_notifier_register = false;
+				snapshot = *pds;
+				found = pds;
+				break;
+			}
+
+			if (!pds->service_connected &&
+			    pds->need_notifier_remove) {
+				pds->need_notifier_remove = false;
 				pds->state = SERVREG_SERVICE_STATE_DOWN;
-		} else {
-			if (!pds->need_notifier_remove)
-				continue;
+				strscpy(service_path, pds->service_path,
+					sizeof(service_path));
+				state = pds->state;
+				found = pds;
+				notify = true;
+				break;
+			}
+		}
+		mutex_unlock(&pdr->list_lock);
 
-			pds->need_notifier_remove = false;
-			pds->state = SERVREG_SERVICE_STATE_DOWN;
+		if (!found)
+			break;
+
+		if (!notify) {
+			ret = pdr_register_listener(pdr, &snapshot, true);
+			state = ret < 0 ? SERVREG_SERVICE_STATE_DOWN :
+					 snapshot.state;
+			strscpy(service_path, snapshot.service_path,
+				sizeof(service_path));
+
+			mutex_lock(&pdr->list_lock);
+			found = NULL;
+			list_for_each_entry(pds, &pdr->lookups, node) {
+				if (strcmp(pds->service_path, service_path))
+					continue;
+
+				if (pds->service_connected &&
+				    pds->addr.sq_node == snapshot.addr.sq_node &&
+				    pds->addr.sq_port == snapshot.addr.sq_port) {
+					pds->state = state;
+					found = pds;
+				}
+				break;
+			}
+			mutex_unlock(&pdr->list_lock);
+
+			if (!found)
+				continue;
 		}
 
 		mutex_lock(&pdr->status_lock);
-		pdr->status(pds->state, pds->service_path, pdr->priv);
+		pdr->status(state, service_path, pdr->priv);
 		mutex_unlock(&pdr->status_lock);
 	}
-	mutex_unlock(&pdr->list_lock);
 }
 
 static int pdr_notifier_new_server(struct qmi_handle *qmi,
