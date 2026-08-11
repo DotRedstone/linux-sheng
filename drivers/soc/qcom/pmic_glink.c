@@ -237,6 +237,8 @@ static void pmic_glink_pdr_callback(int state, char *svc_path, void *priv)
 {
 	struct pmic_glink *pg = priv;
 
+	dev_dbg(pg->dev, "pmic_glink_pdr_callback: svc_path=%s state=%d\n", svc_path, state);
+
 	guard(mutex)(&pg->state_lock);
 	pg->pdr_state = state;
 
@@ -254,6 +256,8 @@ static int pmic_glink_rpmsg_probe(struct rpmsg_device *rpdev)
 
 	dev_set_drvdata(&rpdev->dev, pg);
 	pg->pdr_available = rpdev->id.driver_data;
+
+	dev_dbg(&rpdev->dev, "pmic_glink_rpmsg_probe: pg->pdr_available=%d\n", pg->pdr_available);
 
 	guard(mutex)(&pg->state_lock);
 	pg->ept = rpdev->ept;
@@ -342,6 +346,9 @@ static int pmic_glink_probe(struct platform_device *pdev)
 	}
 
 	if (pg->data->charger_pdr_service_name && pg->data->charger_pdr_service_path) {
+		dev_dbg(&pdev->dev, "adding PDR lookup for %s, %s\n",
+			 pg->data->charger_pdr_service_name,
+			 pg->data->charger_pdr_service_path);
 		service = pdr_add_lookup(pg->pdr, pg->data->charger_pdr_service_name,
 					 pg->data->charger_pdr_service_path);
 		if (IS_ERR(service)) {
@@ -349,6 +356,7 @@ static int pmic_glink_probe(struct platform_device *pdev)
 					    "failed adding pdr lookup for charger_pd\n");
 			goto out_release_aux_devices;
 		}
+		dev_dbg(&pdev->dev, "PDR lookup added successfully\n");
 	}
 
 	mutex_lock(&__pmic_glink_lock);
