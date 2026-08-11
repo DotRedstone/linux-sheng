@@ -359,14 +359,6 @@
 #define DEFAULT_SWEEP_STEP_DURATION_MS		100
 #define DEFAULT_AMPLITUDE_FOR_SWEEP		0xFF
 
-// b/311643110
-// The spec of LRA's f0 is 200 ± 10%
-// But there is a 5 Hz shift in SW value compared to the f0 measured by IMU.
-#define LRA_SPEC_MIN_FREQUENCY 185
-#define LRA_SPEC_MAX_FREQUENCY 215
-#define LRA_SPEC_DEFAULT_FREQUENCY 205
-#define LRA_SPEC_DEFAULT_PERIOD_US (USEC_PER_SEC / LRA_SPEC_DEFAULT_FREQUENCY)
-
 enum hap_status_sel {
 	CAL_TLRA_CL_STS = 0x00,
 	T_WIND_STS,
@@ -3273,12 +3265,9 @@ static int haptics_config_wa(struct haptics_chip *chip)
 	return 0;
 }
 
-static int haptics_start_lra_calibrate(struct haptics_chip *chip);
 static int haptics_hw_init(struct haptics_chip *chip)
 {
 	int rc;
-	int retry = 0;
-	u32 cl_f_lra;
 
 	rc = haptics_config_wa(chip);
 	if (rc < 0)
@@ -3306,26 +3295,6 @@ static int haptics_hw_init(struct haptics_chip *chip)
 	rc = haptics_init_lra_period_config(chip);
 	if (rc < 0)
 		return rc;
-	// Workaround for b/339117433 since we can't reproduce it
-	cl_f_lra = USEC_PER_SEC / chip->config.cl_t_lra_us;
-	dev_info(chip->dev, "lra frequency detected at boot: %d Hz\n", cl_f_lra);
-	while ((cl_f_lra < LRA_SPEC_MIN_FREQUENCY || cl_f_lra > LRA_SPEC_MAX_FREQUENCY) &&
-				retry < 3) {
-		haptics_start_lra_calibrate(chip);
-		cl_f_lra = USEC_PER_SEC / chip->config.cl_t_lra_us;
-		retry++;
-		dev_info(chip->dev, "frequency after [%d] calibration: %d Hz\n", retry, cl_f_lra);
-	}
-
-	if (cl_f_lra < LRA_SPEC_MIN_FREQUENCY ||
-			cl_f_lra > LRA_SPEC_MAX_FREQUENCY) {
-		// HACK: forced set the frequency
-		rc = haptics_config_openloop_lra_period(chip, LRA_SPEC_DEFAULT_PERIOD_US);
-		chip->config.cl_t_lra_us = LRA_SPEC_DEFAULT_PERIOD_US;
-		dev_err(chip->dev,
-			"lra frequency is still out of range, forced set to %d Hz, ret: %d\n",
-			LRA_SPEC_DEFAULT_FREQUENCY, rc);
-	}
 
 	rc = haptics_init_preload_pattern_effect(chip);
 	if (rc < 0)
