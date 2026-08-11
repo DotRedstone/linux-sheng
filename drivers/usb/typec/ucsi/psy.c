@@ -191,6 +191,9 @@ static int ucsi_psy_get_current_max(struct ucsi_connector *con,
 			max_current = (pdo_current > max_current) ? pdo_current
 								  : max_current;
 		}
+		if (!max_current && con->rdo)
+			max_current = rdo_max_current(con->rdo) * 1000;
+
 		val->intval = max_current;
 		break;
 	case UCSI_CONSTAT_PWR_OPMODE_TYPEC1_5:
