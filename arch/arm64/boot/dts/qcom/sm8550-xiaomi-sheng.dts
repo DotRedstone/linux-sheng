@@ -1043,7 +1043,8 @@
 		cirrus,vpbr-atk-rate = <0>;
 		cirrus,vpbr-wait = <0>;
 		cirrus,vpbr-rel-rate = <0>;
-		cirrus,vpbr-enable = <1>;
+		cirrus,vpbr-enable;
+		cirrus,low-pwr-mode-standby;
 		cirrus,gpio2-src-sel = <4>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,bst-ipk-ma = <4000>;
@@ -1063,7 +1064,8 @@
 		cirrus,vpbr-atk-rate = <0>;
 		cirrus,vpbr-wait = <0>;
 		cirrus,vpbr-rel-rate = <0>;
-		cirrus,vpbr-enable = <1>;
+		cirrus,vpbr-enable;
+		cirrus,low-pwr-mode-standby;
 		cirrus,gpio2-src-sel = <4>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,bst-ipk-ma = <4000>;
@@ -1083,7 +1085,8 @@
 		cirrus,vpbr-atk-rate = <0>;
 		cirrus,vpbr-wait = <0>;
 		cirrus,vpbr-rel-rate = <0>;
-		cirrus,vpbr-enable = <1>;
+		cirrus,vpbr-enable;
+		cirrus,low-pwr-mode-standby;
 		cirrus,gpio2-src-sel = <4>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,bst-ipk-ma = <4000>;
@@ -1108,7 +1111,8 @@
 		cirrus,vpbr-atk-rate = <0>;
 		cirrus,vpbr-wait = <0>;
 		cirrus,vpbr-rel-rate = <0>;
-		cirrus,vpbr-enable = <1>;
+		cirrus,vpbr-enable;
+		cirrus,low-pwr-mode-standby;
 		cirrus,gpio2-src-sel = <4>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,bst-ipk-ma = <4000>;
@@ -1128,7 +1132,8 @@
 		cirrus,vpbr-atk-rate = <0>;
 		cirrus,vpbr-wait = <0>;
 		cirrus,vpbr-rel-rate = <0>;
-		cirrus,vpbr-enable = <1>;
+		cirrus,vpbr-enable;
+		cirrus,low-pwr-mode-standby;
 		cirrus,gpio2-src-sel = <4>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,bst-ipk-ma = <4000>;
@@ -1148,7 +1153,8 @@
 		cirrus,vpbr-atk-rate = <0>;
 		cirrus,vpbr-wait = <0>;
 		cirrus,vpbr-rel-rate = <0>;
-		cirrus,vpbr-enable = <1>;
+		cirrus,vpbr-enable;
+		cirrus,low-pwr-mode-standby;
 		cirrus,gpio2-src-sel = <4>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,bst-ipk-ma = <4000>;
