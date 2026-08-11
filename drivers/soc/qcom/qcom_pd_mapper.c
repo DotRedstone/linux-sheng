@@ -663,6 +663,8 @@ static struct qcom_pdm_data *qcom_pdm_start(void)
 		goto err_stop;
 	}
 
+	pr_debug("PDM: qcom_pdm_start completed successfully\n");
+
 	return data;
 
 err_stop:

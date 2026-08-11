@@ -85,6 +85,8 @@ static int pdr_locator_new_server(struct qmi_handle *qmi,
 	pdr->locator_init_complete = true;
 	mutex_unlock(&pdr->lock);
 
+	pr_debug("PDR: locator new server node=%d port=%d\n", svc->node, svc->port);
+
 	/* Service pending lookup requests */
 	schedule_work(&pdr->locator_work);
 
@@ -386,6 +388,9 @@ static int pdr_get_domain_list(struct servreg_get_domain_list_req *req,
 		return -EREMOTEIO;
 	}
 
+	pr_debug("PDR: %s get domain list returned %d domains (of %d total)\n",
+		req->service_name, resp->domain_list_len, resp->total_domains);
+
 	return 0;
 }
 
@@ -414,6 +419,8 @@ static int pdr_locate_service(struct pdr_handle *pdr, struct pdr_service *pds)
 		for (i = 0; i < resp->domain_list_len; i++) {
 			entry = &resp->domain_list[i];
 
+			pr_debug("PDR: domain candidate: name='%s' instance=%u\n", entry->name, entry->instance);
+
 			if (strnlen(entry->name, sizeof(entry->name)) == sizeof(entry->name))
 				continue;
 
@@ -434,6 +441,8 @@ static int pdr_locate_service(struct pdr_handle *pdr, struct pdr_service *pds)
 
 		domains_read += resp->domain_list_len;
 	} while (domains_read < resp->total_domains);
+
+	pr_err("PDR: %s service '%s' not found in %d domains\n", pds->service_name, pds->service_path, domains_read);
 
 	return ret;
 }
@@ -539,6 +548,9 @@ struct pdr_service *pdr_add_lookup(struct pdr_handle *pdr,
 
 	list_add(&pds->node, &pdr->lookups);
 	mutex_unlock(&pdr->list_lock);
+
+	pr_debug("PDR: adding lookup for service_name=%s service_path=%s\n",
+		service_name, service_path);
 
 	schedule_work(&pdr->locator_work);
 
