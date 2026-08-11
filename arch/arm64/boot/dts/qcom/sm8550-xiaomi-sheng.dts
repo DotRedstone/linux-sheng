@@ -1297,7 +1297,7 @@
 };
 
 &mdss_dp0 {
-	status = "okay";
+	status = "disabled";
 };
 
 &mdss_dp0_out {
