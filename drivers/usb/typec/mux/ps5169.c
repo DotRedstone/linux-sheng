@@ -264,6 +264,7 @@ static int ps5169_probe(struct i2c_client *client)
 		return -ENOMEM;
 
 	ps5169->client = client;
+	i2c_set_clientdata(client, ps5169);
 
 	mutex_init(&ps5169->lock);
 
