@@ -885,8 +885,21 @@ return:
 *******************************************************/
 void Boot_Update_Firmware(struct work_struct *work)
 {
+	s32 ret;
+
 	mutex_lock(&ts->lock);
-	nvt_update_firmware(ts->fw_name);
+	ret = nvt_update_firmware(ts->fw_name);
+	if (ret) {
+		NVT_ERR("download firmware failed during boot update\n");
+		goto out;
+	}
+
+	ret = nvt_check_fw_reset_state(RESET_STATE_REK);
+	if (ret) {
+		NVT_ERR("firmware did not reach ReK state during boot update\n");
+		goto out;
+	}
+
 	nvt_get_fw_info();
 	//enable idle baseline update
 	nvt_set_custom_cmd(0x19, 0x00);
@@ -896,6 +909,8 @@ void Boot_Update_Firmware(struct work_struct *work)
 	//test
 	//nvt_set_custom_cmd(0x08, 0x01);
 	//nvt_set_custom_cmd(0x07, 0x00);
+
+out:
 	mutex_unlock(&ts->lock);
 }
 #endif /* BOOT_UPDATE_FIRMWARE */

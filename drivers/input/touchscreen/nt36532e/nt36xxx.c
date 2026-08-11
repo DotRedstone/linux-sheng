@@ -1017,7 +1017,18 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 		nvt_read_fw_history(ts->mmap->MMAP_HISTORY_EVENT1);
 		release_touch_event();
 		release_pen_event();
-		nvt_update_firmware(ts->fw_name);
+		ret = nvt_update_firmware(ts->fw_name);
+		if (ret) {
+			NVT_ERR("download firmware failed during WDT recovery\n");
+			goto XFER_ERROR;
+		}
+
+		ret = nvt_check_fw_reset_state(RESET_STATE_REK);
+		if (ret) {
+			NVT_ERR("firmware did not reach ReK state during WDT recovery\n");
+			goto XFER_ERROR;
+		}
+
 		//enable idle baseline update
 		nvt_set_custom_cmd(0x19, 0x00);
 		nvt_set_doze_delay(120);
