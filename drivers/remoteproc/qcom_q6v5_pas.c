@@ -1402,7 +1402,7 @@ static const struct qcom_pas_data sm8550_cdsp_resource = {
 	.pas_id = 18,
 	.dtb_pas_id = 0x25,
 	.minidump_id = 7,
-	.auto_boot = true,
+	.auto_boot = false,
 	.proxy_pd_names = (char*[]){
 		"cx",
 		"mxc",
