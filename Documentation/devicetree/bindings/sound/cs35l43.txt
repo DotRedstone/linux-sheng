@@ -140,6 +140,10 @@ Optional properties:
 
   - cirrus,vpbr-enable : Enable VP brownout prevention (Boolean)
 
+  - cirrus,low-pwr-mode-standby : Keep the DSP in standby instead of using
+  hibernate between playback sessions (Boolean). Use this on platforms whose
+  firmware and amplifier power sequencing expect standby mode.
+
   - cirrus,vpbr-rel-rate : VP brownout prevention attenuation release step rate.
   Configures the delay between consecutive volume attenuation release steps when
   a brownout condition is no longer present and the VP brownout is in an attenuation
