@@ -144,10 +144,14 @@ static int q6apm_get_apm_state(struct q6apm *apm)
 {
 	struct gpr_pkt *pkt __free(kfree) = audioreach_alloc_apm_cmd_pkt(0,
 								APM_CMD_GET_SPF_STATE, 0);
+	int ret;
+
 	if (IS_ERR(pkt))
 		return PTR_ERR(pkt);
 
-	q6apm_send_cmd_sync(apm, pkt, APM_CMD_RSP_GET_SPF_STATE);
+	ret = q6apm_send_cmd_sync(apm, pkt, APM_CMD_RSP_GET_SPF_STATE);
+	if (ret)
+		return ret;
 
 	return apm->state;
 }
@@ -155,7 +159,7 @@ static int q6apm_get_apm_state(struct q6apm *apm)
 bool q6apm_is_adsp_ready(void)
 {
 	if (g_apm)
-		return q6apm_get_apm_state(g_apm);
+		return q6apm_get_apm_state(g_apm) > 0;
 
 	return false;
 }
@@ -771,8 +775,6 @@ static int apm_probe(gpr_device_t *gdev)
 	idr_init(&apm->modules_idr);
 
 	g_apm = apm;
-
-	q6apm_get_apm_state(apm);
 
 	ret = snd_soc_register_component(dev, &q6apm_audio_component, NULL, 0);
 	if (ret < 0) {
