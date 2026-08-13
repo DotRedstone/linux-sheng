@@ -5338,37 +5338,54 @@ static const struct of_device_id camss_dt_match[] = {
 
 MODULE_DEVICE_TABLE(of, camss_dt_match);
 
-static int __maybe_unused camss_runtime_suspend(struct device *dev)
+static int camss_icc_set_bw(struct camss *camss, bool enable)
 {
-	struct camss *camss = dev_get_drvdata(dev);
+	const struct resources_icc *icc_res = camss->res->icc_res;
+	u32 avg_bw, peak_bw;
+	int rollback_ret;
 	int i;
 	int ret;
 
 	for (i = 0; i < camss->res->icc_path_num; i++) {
-		ret = icc_set_bw(camss->icc_path[i], 0, 0);
-		if (ret)
-			return ret;
+		avg_bw = enable ? icc_res[i].icc_bw_tbl.avg : 0;
+		peak_bw = enable ? icc_res[i].icc_bw_tbl.peak : 0;
+		ret = icc_set_bw(camss->icc_path[i], avg_bw, peak_bw);
+		if (!ret)
+			continue;
+
+		dev_err(camss->dev,
+			"failed to %s interconnect path %s: %d\n",
+			enable ? "restore" : "drop", icc_res[i].name, ret);
+
+		while (--i >= 0) {
+			avg_bw = enable ? 0 : icc_res[i].icc_bw_tbl.avg;
+			peak_bw = enable ? 0 : icc_res[i].icc_bw_tbl.peak;
+			rollback_ret = icc_set_bw(camss->icc_path[i], avg_bw,
+						  peak_bw);
+			if (rollback_ret)
+				dev_err(camss->dev,
+					"failed to roll back interconnect path %s: %d\n",
+					icc_res[i].name, rollback_ret);
+		}
+
+		return ret;
 	}
 
 	return 0;
 }
 
+static int __maybe_unused camss_runtime_suspend(struct device *dev)
+{
+	struct camss *camss = dev_get_drvdata(dev);
+
+	return camss_icc_set_bw(camss, false);
+}
+
 static int __maybe_unused camss_runtime_resume(struct device *dev)
 {
 	struct camss *camss = dev_get_drvdata(dev);
-	const struct resources_icc *icc_res = camss->res->icc_res;
-	int i;
-	int ret;
 
-	for (i = 0; i < camss->res->icc_path_num; i++) {
-		ret = icc_set_bw(camss->icc_path[i],
-				 icc_res[i].icc_bw_tbl.avg,
-				 icc_res[i].icc_bw_tbl.peak);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return camss_icc_set_bw(camss, true);
 }
 
 static const struct dev_pm_ops camss_pm_ops = {
