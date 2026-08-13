@@ -62,8 +62,10 @@ int qcom_q6v5_prepare(struct qcom_q6v5 *q6v5)
 	reinit_completion(&q6v5->stop_done);
 
 	q6v5->running = true;
-	q6v5->handover_issued = false;
+	atomic_set(&q6v5->ready_issued, 0);
+	atomic_set(&q6v5->handover_issued, 0);
 
+	enable_irq(q6v5->ready_irq);
 	enable_irq(q6v5->handover_irq);
 
 	return 0;
@@ -78,13 +80,25 @@ EXPORT_SYMBOL_GPL(qcom_q6v5_prepare);
  */
 int qcom_q6v5_unprepare(struct qcom_q6v5 *q6v5)
 {
-	disable_irq(q6v5->handover_irq);
+	bool handover_issued;
+
+	if (!atomic_xchg(&q6v5->ready_issued, 1))
+		disable_irq(q6v5->ready_irq);
+	else
+		synchronize_irq(q6v5->ready_irq);
+
+	handover_issued = atomic_xchg(&q6v5->handover_issued, 1);
+	if (!handover_issued)
+		disable_irq(q6v5->handover_irq);
+	else
+		synchronize_irq(q6v5->handover_irq);
+
 	q6v5_load_state_toggle(q6v5, false);
 
 	/* Disable interconnect vote, in case handover never happened */
 	icc_set_bw(q6v5->path, 0, 0);
 
-	return !q6v5->handover_issued;
+	return !handover_issued;
 }
 EXPORT_SYMBOL_GPL(qcom_q6v5_unprepare);
 
@@ -137,6 +151,10 @@ static irqreturn_t q6v5_ready_interrupt(int irq, void *data)
 {
 	struct qcom_q6v5 *q6v5 = data;
 
+	if (atomic_xchg(&q6v5->ready_issued, 1))
+		return IRQ_HANDLED;
+
+	disable_irq_nosync(irq);
 	complete(&q6v5->start_done);
 
 	return IRQ_HANDLED;
@@ -164,17 +182,15 @@ static irqreturn_t q6v5_handover_interrupt(int irq, void *data)
 {
 	struct qcom_q6v5 *q6v5 = data;
 
-	if (q6v5->handover_issued) {
-		dev_err(q6v5->dev, "Handover signaled, but it already happened\n");
+	if (atomic_xchg(&q6v5->handover_issued, 1))
 		return IRQ_HANDLED;
-	}
+
+	disable_irq_nosync(irq);
 
 	if (q6v5->handover)
 		q6v5->handover(q6v5);
 
 	icc_set_bw(q6v5->path, 0, 0);
-
-	q6v5->handover_issued = true;
 
 	return IRQ_HANDLED;
 }
@@ -258,6 +274,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
 
 	init_completion(&q6v5->start_done);
 	init_completion(&q6v5->stop_done);
+	atomic_set(&q6v5->ready_issued, 1);
+	atomic_set(&q6v5->handover_issued, 1);
 
 	q6v5->wdog_irq = platform_get_irq_byname(pdev, "wdog");
 	if (q6v5->wdog_irq < 0)
@@ -291,7 +309,8 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->ready_irq,
 					NULL, q6v5_ready_interrupt,
-					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					IRQF_TRIGGER_RISING | IRQF_ONESHOT |
+					IRQF_NO_AUTOEN,
 					"q6v5 ready", q6v5);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to acquire ready IRQ\n");
@@ -304,14 +323,13 @@ int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
 
 	ret = devm_request_threaded_irq(&pdev->dev, q6v5->handover_irq,
 					NULL, q6v5_handover_interrupt,
-					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					IRQF_TRIGGER_RISING | IRQF_ONESHOT |
+					IRQF_NO_AUTOEN,
 					"q6v5 handover", q6v5);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to acquire handover IRQ\n");
 		return ret;
 	}
-	disable_irq(q6v5->handover_irq);
-
 	q6v5->stop_irq = platform_get_irq_byname(pdev, "stop-ack");
 	if (q6v5->stop_irq < 0)
 		return q6v5->stop_irq;

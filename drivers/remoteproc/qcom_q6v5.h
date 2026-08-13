@@ -3,6 +3,7 @@
 #ifndef __QCOM_Q6V5_H__
 #define __QCOM_Q6V5_H__
 
+#include <linux/atomic.h>
 #include <linux/kernel.h>
 #include <linux/completion.h>
 #include <linux/soc/qcom/qcom_aoss.h>
@@ -29,7 +30,8 @@ struct qcom_q6v5 {
 	int handover_irq;
 	int stop_irq;
 
-	bool handover_issued;
+	atomic_t ready_issued;
+	atomic_t handover_issued;
 
 	struct completion start_done;
 	struct completion stop_done;
