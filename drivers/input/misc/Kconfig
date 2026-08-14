@@ -954,6 +954,21 @@ config INPUT_DRV2667_HAPTICS
 	  To compile this driver as a module, choose M here: the
 	  module will be called drv2667-haptics.
 
+config INPUT_FPC1552
+	tristate "Fingerprint Cards FPC1552 resource controller"
+	depends on OF && GPIOLIB && REGULATOR
+	help
+	  Say Y here to enable the platform resource driver used by the
+	  Fingerprint Cards FPC1552 side-mounted sensor. The driver controls
+	  the sensor regulator and reset GPIO, reports its interrupt through
+	  sysfs, and supports wakeup from suspend.
+
+	  Fingerprint matching and enrollment are performed by secure-world
+	  firmware and userspace and are not implemented by this driver.
+
+	  To compile this driver as a module, choose M here. The module will
+	  be called fpc1552.
+
 config INPUT_HISI_POWERKEY
 	tristate "Hisilicon PMIC ONKEY support"
 	depends on ARCH_HISI || COMPILE_TEST

@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/input/fpc,fpc1020.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Fingerprint Cards FPC1020-compatible fingerprint sensors
+
+maintainers:
+  - DotRedstone <dotredstone@users.noreply.github.com>
+
+description:
+  Platform resources used by FPC1020-compatible side-mounted fingerprint
+  sensors, including the FPC1552. Sensor commands and biometric matching are
+  handled by a trusted application outside this resource controller.
+
+properties:
+  compatible:
+    const: fpc,fpc1020
+
+  fp_vdd_vreg-supply:
+    description: Regulator supplying the sensor analog rail
+
+  reset-gpios:
+    maxItems: 1
+
+  irq-gpios:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  wakeup-source: true
+
+required:
+  - compatible
+  - fp_vdd_vreg-supply
+  - reset-gpios
+  - irq-gpios
+  - interrupts
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    fingerprint_fpc {
+        compatible = "fpc,fpc1020";
+        fp_vdd_vreg-supply = <&vreg_l9b_3p3>;
+        reset-gpios = <&tlmm 41 GPIO_ACTIVE_HIGH>;
+        irq-gpios = <&tlmm 40 GPIO_ACTIVE_HIGH>;
+        interrupt-parent = <&tlmm>;
+        interrupts = <40 IRQ_TYPE_EDGE_RISING>;
+        wakeup-source;
+    };
+...

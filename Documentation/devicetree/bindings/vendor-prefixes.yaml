@@ -614,6 +614,8 @@ patternProperties:
     description: Freecom Gmbh
   "^frida,.*":
     description: Shenzhen Frida LCD Co., Ltd.
+  "^fpc,.*":
+    description: Fingerprint Cards AB
   "^friendlyarm,.*":
     description: Guangzhou FriendlyARM Computer Tech Co., Ltd
   "^fsl,.*":

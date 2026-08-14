@@ -5861,18 +5861,6 @@ static int haptics_probe(struct platform_device *pdev)
 
 	mutex_init(&chip->vmax_lock);
 
-	/*
-	 * Firmware normally leaves the haptics module enabled, but that is not
-	 * guaranteed when Linux is cold-booted outside the Android boot flow.
-	 * The PM resume path already enables it explicitly; do the same at probe
-	 * time so HAPTICS_EN can vote hBoost on before the first effect.
-	 */
-	rc = haptics_module_enable(chip, true);
-	if (rc < 0) {
-		dev_err(chip->dev, "Enable haptics module failed, rc = %d\n", rc);
-		return rc;
-	}
-
 	rc = haptics_hw_init(chip);
 	if (rc < 0) {
 		dev_err(chip->dev, "Initialize HW failed, rc = %d\n", rc);
