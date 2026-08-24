@@ -108,30 +108,6 @@ static irqreturn_t fpc1552_irq_thread(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static ssize_t power_show(struct device *dev,
-			  struct device_attribute *attr, char *buf)
-{
-	struct fpc1552_data *fpc = dev_get_drvdata(dev);
-
-	return sysfs_emit(buf, "%u\n", READ_ONCE(fpc->powered));
-}
-
-static ssize_t power_store(struct device *dev, struct device_attribute *attr,
-			   const char *buf, size_t count)
-{
-	struct fpc1552_data *fpc = dev_get_drvdata(dev);
-	bool enable;
-	int ret;
-
-	ret = fpc1552_parse_enable(buf, &enable);
-	if (ret)
-		return ret;
-
-	ret = fpc1552_set_power(fpc, enable);
-	return ret ? ret : count;
-}
-static DEVICE_ATTR_RW(power);
-
 static ssize_t hw_reset_store(struct device *dev,
 			      struct device_attribute *attr,
 			      const char *buf, size_t count)
@@ -263,7 +239,6 @@ static ssize_t fingerdown_wait_store(struct device *dev,
 static DEVICE_ATTR_WO(fingerdown_wait);
 
 static struct attribute *fpc1552_attrs[] = {
-	&dev_attr_power.attr,
 	&dev_attr_hw_reset.attr,
 	&dev_attr_irq.attr,
 	&dev_attr_irq_count.attr,
