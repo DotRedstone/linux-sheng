@@ -27,6 +27,7 @@ struct fpc1552_data {
 	struct gpio_desc *irq_gpio;
 	struct mutex lock; /* Serializes regulator and reset transitions. */
 	atomic64_t irq_count;
+	atomic_t irq_pending;
 	int irq;
 	bool powered;
 	bool prepared;
@@ -99,6 +100,7 @@ static irqreturn_t fpc1552_irq_thread(int irq, void *data)
 	struct fpc1552_data *fpc = data;
 
 	atomic64_inc(&fpc->irq_count);
+	atomic_set(&fpc->irq_pending, 1);
 	if (READ_ONCE(fpc->wakeup_enabled))
 		pm_wakeup_event(fpc->dev, FPC1552_WAKEUP_MS);
 
@@ -140,7 +142,12 @@ static ssize_t irq_show(struct device *dev,
 	struct fpc1552_data *fpc = dev_get_drvdata(dev);
 	int value = gpiod_get_value_cansleep(fpc->irq_gpio);
 
-	return value < 0 ? value : sysfs_emit(buf, "%d\n", value);
+	if (value < 0)
+		return value;
+	if (atomic_xchg(&fpc->irq_pending, 0))
+		value = 1;
+
+	return sysfs_emit(buf, "%d\n", value);
 }
 
 static ssize_t irq_store(struct device *dev, struct device_attribute *attr,
@@ -182,9 +189,11 @@ static ssize_t wakeup_enable_store(struct device *dev,
 	if (ret)
 		return ret;
 
-	ret = device_set_wakeup_enable(dev, enable);
-	if (ret)
-		return ret;
+	if (enable != device_may_wakeup(dev)) {
+		ret = device_set_wakeup_enable(dev, enable);
+		if (ret)
+			return ret;
+	}
 
 	WRITE_ONCE(fpc->wakeup_enabled, enable);
 	return count;
@@ -270,6 +279,7 @@ static int fpc1552_probe(struct platform_device *pdev)
 	fpc->wakeup_enabled = true;
 	mutex_init(&fpc->lock);
 	atomic64_set(&fpc->irq_count, 0);
+	atomic_set(&fpc->irq_pending, 0);
 	platform_set_drvdata(pdev, fpc);
 
 	fpc->vdd = devm_regulator_get(dev, "fp_vdd_vreg");
