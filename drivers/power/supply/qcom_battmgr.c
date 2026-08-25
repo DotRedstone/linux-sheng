@@ -737,8 +737,6 @@ static int qcom_battmgr_bat_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		val->intval = battmgr->status.current_now;
-		if (battmgr->variant == XIAOMI_BATTMGR_SM8550)
-			val->intval = -val->intval;
 		break;
 	case POWER_SUPPLY_PROP_POWER_NOW:
 		val->intval = battmgr->status.power_now;
@@ -2139,8 +2137,9 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 			battmgr->info.voltage_max = le32_to_cpu(resp->intval.value);
 			break;
 		case BATT_CURR_NOW:
+			/* Xiaomi firmware uses the Android current sign convention. */
 			if (battmgr->variant == XIAOMI_BATTMGR_SM8550)
-				battmgr->status.current_now = -le32_to_cpu(resp->intval.value); /* FG1 + FG2 */
+				battmgr->status.current_now = -le32_to_cpu(resp->intval.value);
 			else
 				battmgr->status.current_now = le32_to_cpu(resp->intval.value);
 			break;
