@@ -894,12 +894,6 @@ void Boot_Update_Firmware(struct work_struct *work)
 		goto out;
 	}
 
-	ret = nvt_check_fw_reset_state(RESET_STATE_REK);
-	if (ret) {
-		NVT_ERR("firmware did not reach ReK state during boot update\n");
-		goto out;
-	}
-
 	nvt_get_fw_info();
 	//enable idle baseline update
 	nvt_set_custom_cmd(0x19, 0x00);
