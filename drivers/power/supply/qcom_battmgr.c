@@ -401,6 +401,7 @@ struct qcom_battmgr {
 	struct notifier_block psy_nb;
 	unsigned int typec_current_limit;
 	unsigned int typec_current_retries;
+	unsigned int typec_current_verifications;
 
 	/*
 	 * @lock is used to prevent concurrent power supply requests to the
@@ -1746,6 +1747,7 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 	if (!source.found) {
 		battmgr->typec_current_limit = 0;
 		battmgr->typec_current_retries = 0;
+		battmgr->typec_current_verifications = 0;
 		return;
 	}
 
@@ -1759,8 +1761,14 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 	    battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_CDP)
 		return;
 
-	if (battmgr->typec_current_limit == source.current_max)
-		return;
+	if (battmgr->typec_current_limit == source.current_max) {
+		ret = qcom_battmgr_usb_sm8350_update(battmgr,
+						     POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
+		if (!ret && battmgr->usb.current_limit >= source.current_max)
+			goto verify_later;
+
+		battmgr->typec_current_limit = 0;
+	}
 
 	mutex_lock(&battmgr->lock);
 	ret = qcom_battmgr_request_property(battmgr, BATTMGR_USB_PROPERTY_SET,
@@ -1783,6 +1791,14 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 	battmgr->typec_current_retries = 0;
 	dev_info(battmgr->dev, "applied Type-C source limit: %u uA\n",
 		 source.current_max);
+
+verify_later:
+	if (battmgr->typec_current_verifications < 2) {
+		battmgr->typec_current_verifications++;
+		mod_delayed_work(system_wq, &battmgr->typec_current_work,
+				 msecs_to_jiffies(5000 *
+						   battmgr->typec_current_verifications));
+	}
 	return;
 
 retry:
@@ -1807,6 +1823,7 @@ static int qcom_battmgr_psy_notifier(struct notifier_block *nb,
 		return NOTIFY_OK;
 
 	battmgr->typec_current_retries = 0;
+	battmgr->typec_current_verifications = 0;
 	mod_delayed_work(system_wq, &battmgr->typec_current_work,
 			 msecs_to_jiffies(500));
 
@@ -2464,6 +2481,7 @@ static void qcom_battmgr_pdr_notify(void *priv, int state)
 		if (battmgr->variant == XIAOMI_BATTMGR_SM8550) {
 			battmgr->typec_current_limit = 0;
 			battmgr->typec_current_retries = 0;
+			battmgr->typec_current_verifications = 0;
 			mod_delayed_work(system_wq, &battmgr->typec_current_work,
 					 msecs_to_jiffies(1500));
 		}
