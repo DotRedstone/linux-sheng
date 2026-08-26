@@ -1758,7 +1758,8 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 
 	/* Do not interfere with dedicated, PD/PPS, or proprietary chargers. */
 	if (battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_SDP &&
-	    battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_CDP)
+	    battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_CDP &&
+	    battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_C)
 		return;
 
 	if (battmgr->typec_current_limit == source.current_max) {
@@ -1771,8 +1772,29 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 	}
 
 	mutex_lock(&battmgr->lock);
-	ret = qcom_battmgr_request_property(battmgr, BATTMGR_USB_PROPERTY_SET,
-					    USB_CURR_MAX, source.current_max);
+	/*
+	 * The charger firmware can classify a data-capable Type-C source as
+	 * legacy SDP even though UCSI has already validated its CC current.
+	 * Correct that classification without pretending the source supports PD.
+	 */
+	if (battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_C) {
+		ret = qcom_battmgr_request_property(battmgr,
+						    BATTMGR_USB_PROPERTY_SET,
+						    USB_TYPE,
+						    POWER_SUPPLY_USB_TYPE_C);
+		if (!ret)
+			ret = qcom_battmgr_request_property(battmgr,
+							    BATTMGR_USB_PROPERTY_SET,
+							    USB_ADAP_TYPE,
+							    POWER_SUPPLY_USB_TYPE_C);
+	} else {
+		ret = 0;
+	}
+	if (!ret)
+		ret = qcom_battmgr_request_property(battmgr,
+						    BATTMGR_USB_PROPERTY_SET,
+						    USB_CURR_MAX,
+						    source.current_max);
 	if (!ret)
 		ret = qcom_battmgr_request_property(battmgr,
 						    BATTMGR_USB_PROPERTY_SET,
@@ -1784,7 +1806,9 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 
 	ret = qcom_battmgr_usb_sm8350_update(battmgr,
 					     POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
-	if (ret || battmgr->usb.current_limit < source.current_max)
+	if (!ret && battmgr->usb.current_limit < source.current_max)
+		ret = -ERANGE;
+	if (ret)
 		goto retry;
 
 	battmgr->typec_current_limit = source.current_max;
@@ -1802,12 +1826,14 @@ verify_later:
 	return;
 
 retry:
-	dev_warn_ratelimited(battmgr->dev,
-			     "failed to apply Type-C source limit %u uA: %d (firmware ICL %u uA)\n",
-			     source.current_max, ret, battmgr->usb.current_limit);
-	if (battmgr->typec_current_retries++ < 5)
+	if (battmgr->typec_current_retries++ < 5) {
 		mod_delayed_work(system_wq, &battmgr->typec_current_work,
 				 msecs_to_jiffies(2000));
+	} else {
+		dev_warn(battmgr->dev,
+			 "failed to apply Type-C source limit %u uA: %d (firmware ICL %u uA)\n",
+			 source.current_max, ret, battmgr->usb.current_limit);
+	}
 }
 
 static int qcom_battmgr_psy_notifier(struct notifier_block *nb,
@@ -1825,7 +1851,7 @@ static int qcom_battmgr_psy_notifier(struct notifier_block *nb,
 	battmgr->typec_current_retries = 0;
 	battmgr->typec_current_verifications = 0;
 	mod_delayed_work(system_wq, &battmgr->typec_current_work,
-			 msecs_to_jiffies(500));
+			 msecs_to_jiffies(3000));
 
 	return NOTIFY_OK;
 }
