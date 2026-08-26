@@ -51,6 +51,12 @@ properties:
       - items:
           pattern: "^usb(2-([0-9]|1[0-4])|3-[0-3])$"
 
+  usb-psy-name:
+    description:
+      Name of the USB power supply that receives the peripheral-mode VBUS
+      current limit selected by the gadget configuration.
+    $ref: /schemas/types.yaml#/definitions/string
+
   snps,usb2-lpm-disable:
     description: Indicate if we don't want to enable USB2 HW LPM for host
       mode.
@@ -429,4 +435,3 @@ required:
 
 additionalProperties: true
 ...
-
