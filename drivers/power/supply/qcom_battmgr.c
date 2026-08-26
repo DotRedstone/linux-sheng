@@ -5,7 +5,6 @@
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #include <linux/auxiliary_bus.h>
-#include <linux/devm-helpers.h>
 #include <linux/hex.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -397,11 +396,6 @@ struct qcom_battmgr {
 	u8 xiaomi_verify_slave;
 
 	struct work_struct enable_work;
-	struct delayed_work typec_current_work;
-	struct notifier_block psy_nb;
-	unsigned int typec_current_limit;
-	unsigned int typec_current_retries;
-	unsigned int typec_current_verifications;
 
 	/*
 	 * @lock is used to prevent concurrent power supply requests to the
@@ -409,46 +403,6 @@ struct qcom_battmgr {
 	 */
 	struct mutex lock;
 };
-
-#define QCOM_BATTMGR_TYPEC_PSY_PREFIX	"ucsi-source-psy-"
-#define QCOM_BATTMGR_TYPEC_MIN_UV	4750000
-#define QCOM_BATTMGR_TYPEC_MAX_UV	5500000
-#define QCOM_BATTMGR_TYPEC_MAX_UA	3000000
-
-struct qcom_battmgr_typec_source {
-	bool found;
-	unsigned int current_max;
-};
-
-static int qcom_battmgr_find_typec_source(struct power_supply *psy, void *data)
-{
-	struct qcom_battmgr_typec_source *source = data;
-	union power_supply_propval online, type, status, voltage, current_max;
-
-	if (strncmp(psy->desc->name, QCOM_BATTMGR_TYPEC_PSY_PREFIX,
-		    strlen(QCOM_BATTMGR_TYPEC_PSY_PREFIX)))
-		return 0;
-
-	if (power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &online) ||
-	    !online.intval ||
-	    power_supply_get_property(psy, POWER_SUPPLY_PROP_USB_TYPE, &type) ||
-	    type.intval != POWER_SUPPLY_USB_TYPE_C ||
-	    power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &status) ||
-	    status.intval != POWER_SUPPLY_STATUS_CHARGING ||
-	    power_supply_get_property(psy, POWER_SUPPLY_PROP_VOLTAGE_NOW, &voltage) ||
-	    voltage.intval < QCOM_BATTMGR_TYPEC_MIN_UV ||
-	    voltage.intval > QCOM_BATTMGR_TYPEC_MAX_UV ||
-	    power_supply_get_property(psy, POWER_SUPPLY_PROP_CURRENT_MAX,
-				      &current_max) ||
-	    current_max.intval <= 500000)
-		return 0;
-
-	source->current_max = min_t(unsigned int, current_max.intval,
-				    QCOM_BATTMGR_TYPEC_MAX_UA);
-	source->found = true;
-
-	return 1;
-}
 
 static int qcom_battmgr_request(struct qcom_battmgr *battmgr, void *data, size_t len)
 {
@@ -1732,113 +1686,6 @@ static int qcom_battmgr_usb_is_writeable(struct power_supply *psy,
 	       psp == POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT;
 }
 
-static void qcom_battmgr_typec_current_worker(struct work_struct *work)
-{
-	struct qcom_battmgr *battmgr =
-		container_of(to_delayed_work(work), struct qcom_battmgr,
-			     typec_current_work);
-	struct qcom_battmgr_typec_source source = {};
-	int ret;
-
-	if (!battmgr->service_up)
-		return;
-
-	power_supply_for_each_psy(&source, qcom_battmgr_find_typec_source);
-	if (!source.found) {
-		battmgr->typec_current_limit = 0;
-		battmgr->typec_current_retries = 0;
-		battmgr->typec_current_verifications = 0;
-		return;
-	}
-
-	ret = qcom_battmgr_usb_sm8350_update(battmgr,
-					     POWER_SUPPLY_PROP_USB_TYPE);
-	if (ret)
-		goto retry;
-
-	/* Do not interfere with dedicated, PD/PPS, or proprietary chargers. */
-	if (battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_SDP &&
-	    battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_CDP)
-		return;
-
-	if (battmgr->typec_current_limit == source.current_max) {
-		ret = qcom_battmgr_usb_sm8350_update(battmgr,
-						     POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
-		if (!ret && battmgr->usb.current_limit >= source.current_max)
-			goto verify_later;
-
-		battmgr->typec_current_limit = 0;
-	}
-
-	mutex_lock(&battmgr->lock);
-	ret = qcom_battmgr_request_property(battmgr, BATTMGR_USB_PROPERTY_SET,
-					    USB_CURR_MAX, source.current_max);
-	if (!ret)
-		ret = qcom_battmgr_request_property(battmgr,
-						    BATTMGR_USB_PROPERTY_SET,
-					    USB_INPUT_CURR_LIMIT,
-					    source.current_max);
-	mutex_unlock(&battmgr->lock);
-	if (ret)
-		goto retry;
-
-	ret = qcom_battmgr_usb_sm8350_update(battmgr,
-						     POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
-	if (!ret && battmgr->usb.current_limit < source.current_max)
-		ret = -ERANGE;
-	if (ret)
-		goto retry;
-
-	battmgr->typec_current_limit = source.current_max;
-	battmgr->typec_current_retries = 0;
-	dev_info(battmgr->dev, "applied Type-C source limit: %u uA\n",
-		 source.current_max);
-
-verify_later:
-	if (battmgr->typec_current_verifications < 2) {
-		battmgr->typec_current_verifications++;
-		mod_delayed_work(system_wq, &battmgr->typec_current_work,
-				 msecs_to_jiffies(5000 *
-						   battmgr->typec_current_verifications));
-	}
-	return;
-
-retry:
-	if (battmgr->typec_current_retries++ < 5) {
-		mod_delayed_work(system_wq, &battmgr->typec_current_work,
-				 msecs_to_jiffies(2000));
-	} else {
-		dev_warn(battmgr->dev,
-			 "failed to apply Type-C source limit %u uA: %d (firmware ICL %u uA)\n",
-			 source.current_max, ret, battmgr->usb.current_limit);
-	}
-}
-
-static int qcom_battmgr_psy_notifier(struct notifier_block *nb,
-				     unsigned long event, void *data)
-{
-	struct qcom_battmgr *battmgr =
-		container_of(nb, struct qcom_battmgr, psy_nb);
-	struct power_supply *psy = data;
-
-	if (event != PSY_EVENT_PROP_CHANGED ||
-	    strncmp(psy->desc->name, QCOM_BATTMGR_TYPEC_PSY_PREFIX,
-		    strlen(QCOM_BATTMGR_TYPEC_PSY_PREFIX)))
-		return NOTIFY_OK;
-
-	battmgr->typec_current_retries = 0;
-	battmgr->typec_current_verifications = 0;
-	mod_delayed_work(system_wq, &battmgr->typec_current_work,
-			 msecs_to_jiffies(3000));
-
-	return NOTIFY_OK;
-}
-
-static void qcom_battmgr_unregister_psy_notifier(void *data)
-{
-	power_supply_unreg_notifier(data);
-}
-
 static const enum power_supply_property sc8280xp_usb_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
@@ -2482,16 +2329,8 @@ static void qcom_battmgr_pdr_notify(void *priv, int state)
 	if (state == SERVREG_SERVICE_STATE_UP) {
 		battmgr->service_up = true;
 		schedule_work(&battmgr->enable_work);
-		if (battmgr->variant == XIAOMI_BATTMGR_SM8550) {
-			battmgr->typec_current_limit = 0;
-			battmgr->typec_current_retries = 0;
-			battmgr->typec_current_verifications = 0;
-			mod_delayed_work(system_wq, &battmgr->typec_current_work,
-					 msecs_to_jiffies(1500));
-		}
 	} else {
 		battmgr->service_up = false;
-		battmgr->typec_current_limit = 0;
 	}
 }
 
@@ -2536,11 +2375,6 @@ static int qcom_battmgr_probe(struct auxiliary_device *adev,
 	psy_cfg_supply.num_supplicants = 1;
 
 	INIT_WORK(&battmgr->enable_work, qcom_battmgr_enable_worker);
-	ret = devm_delayed_work_autocancel(dev, &battmgr->typec_current_work,
-					   qcom_battmgr_typec_current_worker);
-	if (ret)
-		return dev_err_probe(dev, ret,
-				     "failed to initialize Type-C current work\n");
 	mutex_init(&battmgr->lock);
 	init_completion(&battmgr->ack);
 
@@ -2618,20 +2452,6 @@ static int qcom_battmgr_probe(struct auxiliary_device *adev,
 		return PTR_ERR(battmgr->client);
 
 	pmic_glink_client_register(battmgr->client);
-
-	if (battmgr->variant == XIAOMI_BATTMGR_SM8550) {
-		battmgr->psy_nb.notifier_call = qcom_battmgr_psy_notifier;
-		ret = power_supply_reg_notifier(&battmgr->psy_nb);
-		if (ret)
-			return dev_err_probe(dev, ret,
-					     "failed to register power supply notifier\n");
-
-		ret = devm_add_action_or_reset(dev,
-					       qcom_battmgr_unregister_psy_notifier,
-					       &battmgr->psy_nb);
-		if (ret)
-			return ret;
-	}
 
 	return 0;
 }
