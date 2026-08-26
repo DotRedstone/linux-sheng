@@ -1738,6 +1738,7 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 		container_of(to_delayed_work(work), struct qcom_battmgr,
 			     typec_current_work);
 	struct qcom_battmgr_typec_source source = {};
+	u32 real_type = POWER_SUPPLY_USB_TYPE_UNKNOWN;
 	int ret;
 
 	if (!battmgr->service_up)
@@ -1762,10 +1763,24 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 	    battmgr->usb.usb_type != POWER_SUPPLY_USB_TYPE_C)
 		return;
 
+	ret = qcom_battmgr_xiaomi_request_property(battmgr,
+						   BATTMGR_XM_PROPERTY_GET,
+						   XM_BATT_REAL_TYPE, 0,
+						   &real_type);
+	if (ret)
+		goto retry;
+
+	if (real_type != POWER_SUPPLY_USB_TYPE_SDP &&
+	    real_type != POWER_SUPPLY_USB_TYPE_CDP &&
+	    real_type != POWER_SUPPLY_USB_TYPE_C)
+		return;
+
 	if (battmgr->typec_current_limit == source.current_max) {
 		ret = qcom_battmgr_usb_sm8350_update(battmgr,
-						     POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
-		if (!ret && battmgr->usb.current_limit >= source.current_max)
+						     POWER_SUPPLY_PROP_CURRENT_MAX);
+		if (!ret && battmgr->usb.usb_type == POWER_SUPPLY_USB_TYPE_C &&
+		    real_type == POWER_SUPPLY_USB_TYPE_C &&
+		    battmgr->usb.current_max >= source.current_max)
 			goto verify_later;
 
 		battmgr->typec_current_limit = 0;
@@ -1795,26 +1810,54 @@ static void qcom_battmgr_typec_current_worker(struct work_struct *work)
 						    BATTMGR_USB_PROPERTY_SET,
 						    USB_CURR_MAX,
 						    source.current_max);
-	if (!ret)
-		ret = qcom_battmgr_request_property(battmgr,
-						    BATTMGR_USB_PROPERTY_SET,
-						    USB_INPUT_CURR_LIMIT,
-						    source.current_max);
 	mutex_unlock(&battmgr->lock);
+	if (ret)
+		goto retry;
+
+	if (real_type != POWER_SUPPLY_USB_TYPE_C) {
+		ret = qcom_battmgr_xiaomi_request_property(battmgr,
+							   BATTMGR_XM_PROPERTY_SET,
+							   XM_BATT_REAL_TYPE,
+							   POWER_SUPPLY_USB_TYPE_C,
+							   NULL);
+		if (ret)
+			goto retry;
+	}
+
+	mutex_lock(&battmgr->lock);
+	ret = qcom_battmgr_request_property(battmgr, BATTMGR_USB_PROPERTY_SET,
+					    USB_INPUT_CURR_LIMIT,
+					    source.current_max);
+	mutex_unlock(&battmgr->lock);
+	if (ret)
+		goto retry;
+
+	ret = qcom_battmgr_xiaomi_request_property(battmgr,
+						   BATTMGR_XM_PROPERTY_GET,
+						   XM_BATT_REAL_TYPE, 0,
+						   &real_type);
+	if (ret)
+		goto retry;
+
+	ret = qcom_battmgr_usb_sm8350_update(battmgr,
+					     POWER_SUPPLY_PROP_CURRENT_MAX);
+	if (!ret && real_type != POWER_SUPPLY_USB_TYPE_C)
+		ret = -ERANGE;
+	if (!ret && battmgr->usb.current_max < source.current_max)
+		ret = -ERANGE;
 	if (ret)
 		goto retry;
 
 	ret = qcom_battmgr_usb_sm8350_update(battmgr,
 					     POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
-	if (!ret && battmgr->usb.current_limit < source.current_max)
-		ret = -ERANGE;
 	if (ret)
-		goto retry;
+		battmgr->usb.current_limit = 0;
 
 	battmgr->typec_current_limit = source.current_max;
 	battmgr->typec_current_retries = 0;
-	dev_info(battmgr->dev, "applied Type-C source limit: %u uA\n",
-		 source.current_max);
+	dev_info(battmgr->dev,
+		 "classified Type-C source at %u uA (firmware ICL %u uA)\n",
+		 source.current_max, battmgr->usb.current_limit);
 
 verify_later:
 	if (battmgr->typec_current_verifications < 2) {
@@ -1831,8 +1874,8 @@ retry:
 				 msecs_to_jiffies(2000));
 	} else {
 		dev_warn(battmgr->dev,
-			 "failed to apply Type-C source limit %u uA: %d (firmware ICL %u uA)\n",
-			 source.current_max, ret, battmgr->usb.current_limit);
+			 "failed to classify Type-C source at %u uA: %d (real type %u)\n",
+			 source.current_max, ret, real_type);
 	}
 }
 
