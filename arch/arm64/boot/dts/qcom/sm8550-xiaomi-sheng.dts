@@ -159,6 +159,13 @@
 	};
 
 	reserved-memory {
+		ramoops@a7000000 {
+			compatible = "ramoops";
+			reg = <0 0xa7000000 0 0x400000>;
+			console-size = <0x200000>;
+			pmsg-size = <0x200000>;
+		};
+
 		xbl_ramdump_mem: xbl-ramdump-region@81200000 {
 			reg = <0 0x81200000 0 0x280000>;
 			no-map;
