@@ -115,6 +115,18 @@
 		};
 	};
 
+	fingerprint_fpc {
+		compatible = "fpc,fpc1020";
+		fp_vdd_vreg-supply = <&vreg_l9b_3p3>;
+		reset-gpios = <&tlmm 41 GPIO_ACTIVE_HIGH>;
+		irq-gpios = <&tlmm 40 GPIO_ACTIVE_HIGH>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <40 IRQ_TYPE_EDGE_RISING>;
+		pinctrl-0 = <&fpc1552_default>;
+		pinctrl-names = "default";
+		wakeup-source;
+	};
+
 	pmic-glink {
 		compatible = "xiaomi,sm8550-pmic-glink", "qcom,sm8550-pmic-glink", "qcom,pmic-glink";
 		#address-cells = <1>;
@@ -1845,6 +1857,24 @@
 		function = "gpio";
 		drive-strength = <8>;
 		bias-pull-down;
+	};
+
+	fpc1552_default: fpc1552-default-state {
+		reset-pins {
+			pins = "gpio41";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+			output-low;
+		};
+
+		irq-pins {
+			pins = "gpio40";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-pull-down;
+			input-enable;
+		};
 	};
 
 	qup_i2c8_data_clk: qup-i2c8-data-clk-state {
