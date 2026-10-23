@@ -856,6 +856,7 @@ int32_t nvt_update_firmware(const char *firmware_name)
 
 	NVT_LOG("Update firmware success! <%ld us>\n",
 			(long) ktime_us_delta(end, start));
+	nvt_thp_mark_epoch();
 
 	/* Get FW Info */
 	ret = nvt_get_fw_info();
@@ -885,17 +886,28 @@ return:
 *******************************************************/
 void Boot_Update_Firmware(struct work_struct *work)
 {
+	s32 ret;
+
 	mutex_lock(&ts->lock);
-	nvt_update_firmware(ts->fw_name);
+	ret = nvt_update_firmware(ts->fw_name);
+	if (ret) {
+		NVT_ERR("download firmware failed during boot update\n");
+		goto out;
+	}
+
 	nvt_get_fw_info();
 	//enable idle baseline update
 	nvt_set_custom_cmd(0x19, 0x00);
 	nvt_set_doze_delay(120);
 	//enter doze mode
 	nvt_set_custom_cmd(0x01, 0x02);
+	nvt_thp_restore_stylus();
 	//test
 	//nvt_set_custom_cmd(0x08, 0x01);
 	//nvt_set_custom_cmd(0x07, 0x00);
+
+out:
 	mutex_unlock(&ts->lock);
+	nvt_power_supply_restore();
 }
 #endif /* BOOT_UPDATE_FIRMWARE */
