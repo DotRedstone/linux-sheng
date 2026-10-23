@@ -1782,7 +1782,8 @@
 
 		panel = <&display_panel>;
 
-		firmware-name = "novatek/novatek_nt36532e_fw.bin";
+		/* Legacy THP stream uses the vendor CSOT firmware selected on 7.1.8. */
+		firmware-name = "novatek/novatek_nt36532_n81a_fw_csot.bin";
 	};
 };
 
