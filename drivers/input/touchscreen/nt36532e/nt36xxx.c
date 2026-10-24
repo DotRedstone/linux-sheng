@@ -793,6 +793,8 @@ static void release_pen_event(void) {
 		input_report_abs(ts->pen_input_dev, ABS_DISTANCE, 0);
 		input_report_key(ts->pen_input_dev, BTN_TOUCH, 0);
 		input_report_key(ts->pen_input_dev, BTN_TOOL_PEN, 0);
+		input_report_key(ts->pen_input_dev, BTN_STYLUS, 0);
+		input_report_key(ts->pen_input_dev, BTN_STYLUS2, 0);
 		input_sync(ts->pen_input_dev);
 	}
 }
@@ -962,7 +964,8 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	uint8_t press_id[TOUCH_MAX_FINGER_NUM] = {0};
 	int32_t i = 0;
 	int32_t finger_cnt = 0;
-#if 0
+/* Experimental pen parser for the existing Novatek frame. */
+#if 1
 	uint8_t pen_format_id = 0;
 	uint32_t pen_x = 0;
 	uint32_t pen_y = 0;
@@ -1082,8 +1085,8 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 	input_sync(ts->input_dev);
 
-	/* TODO: Find pen struct in fw if pen is processed */
-#if 0
+	/* Experimental: this legacy parser must be validated on-device. */
+#if 1
 	if (ts->pen_support) {
 /*
 		//--- dump pen buf ---
@@ -1118,6 +1121,8 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 				input_report_abs(ts->pen_input_dev, ABS_TILT_Y, pen_tilt_y);
 				input_report_abs(ts->pen_input_dev, ABS_DISTANCE, pen_distance);
 				input_report_key(ts->pen_input_dev, BTN_TOOL_PEN, !!pen_distance || !!pen_pressure);
+				input_report_key(ts->pen_input_dev, BTN_STYLUS, !!pen_btn1);
+				input_report_key(ts->pen_input_dev, BTN_STYLUS2, !!pen_btn2);
 				// TBD: pen battery event report
 				// NVT_LOG("pen_battery=%d\n", pen_battery);
 			} else if (pen_format_id == 0xF0) {
@@ -1135,6 +1140,8 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			input_report_abs(ts->pen_input_dev, ABS_DISTANCE, 0);
 			input_report_key(ts->pen_input_dev, BTN_TOUCH, 0);
 			input_report_key(ts->pen_input_dev, BTN_TOOL_PEN, 0);
+			input_report_key(ts->pen_input_dev, BTN_STYLUS, 0);
+			input_report_key(ts->pen_input_dev, BTN_STYLUS2, 0);
 		}
 
 		input_sync(ts->pen_input_dev);
@@ -1456,6 +1463,8 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		ts->pen_input_dev->evbit[0] = BIT_MASK(EV_SYN) | BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 		ts->pen_input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
 		ts->pen_input_dev->keybit[BIT_WORD(BTN_TOOL_PEN)] |= BIT_MASK(BTN_TOOL_PEN);
+		ts->pen_input_dev->keybit[BIT_WORD(BTN_STYLUS)] |= BIT_MASK(BTN_STYLUS);
+		ts->pen_input_dev->keybit[BIT_WORD(BTN_STYLUS2)] |= BIT_MASK(BTN_STYLUS2);
 		//ts->pen_input_dev->keybit[BIT_WORD(BTN_TOOL_RUBBER)] |= BIT_MASK(BTN_TOOL_RUBBER);
 		ts->pen_input_dev->propbit[0] = BIT(INPUT_PROP_DIRECT);
 
@@ -1471,6 +1480,15 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 			input_set_abs_params(ts->pen_input_dev, ABS_Y, 0, ts->abs_y_max - 1, 0, 0);
 		}
 #endif /* #if NVT_SUPER_RESOLUTION_N */
+		/* Approximate physical display area (12.4-inch 3:2): 262 x 175 mm.
+		 * Recalibrate against actual pen frame coordinates before upstreaming.
+		 */
+		input_abs_set_res(ts->pen_input_dev, ABS_X,
+			max_t(unsigned int, 1, DIV_ROUND_CLOSEST(
+				input_abs_get_max(ts->pen_input_dev, ABS_X), 262)));
+		input_abs_set_res(ts->pen_input_dev, ABS_Y,
+			max_t(unsigned int, 1, DIV_ROUND_CLOSEST(
+				input_abs_get_max(ts->pen_input_dev, ABS_Y), 175)));
 		input_set_abs_params(ts->pen_input_dev, ABS_PRESSURE, 0, PEN_PRESSURE_MAX, 0, 0);
 		input_set_abs_params(ts->pen_input_dev, ABS_DISTANCE, 0, PEN_DISTANCE_MAX, 0, 0);
 		input_set_abs_params(ts->pen_input_dev, ABS_TILT_X, PEN_TILT_MIN, PEN_TILT_MAX, 0, 0);
