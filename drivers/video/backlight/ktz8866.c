@@ -173,6 +173,8 @@ static int ktz8866_probe(struct i2c_client *client)
 	props.type = BACKLIGHT_RAW;
 	props.max_brightness = MAX_BRIGHTNESS;
 	props.brightness = DEFAULT_BRIGHTNESS;
+	/* 等待面板完成准备后，由 DRM 首次打开背光。 */
+	props.power = BACKLIGHT_POWER_OFF;
 	props.scale = BACKLIGHT_SCALE_LINEAR;
 
 	backlight_dev = devm_backlight_device_register(&client->dev, "ktz8866-backlight",
