@@ -220,8 +220,6 @@ static int sheng_tianma_init_sequence(struct panel_info *pinfo)
 
 	mipi_dsi_msleep(&dsi_ctx, 120);
 
-	mipi_dsi_dcs_set_display_on_multi(&dsi_ctx);
-
 	return dsi_ctx.accum_err;
 }
 
@@ -353,6 +351,17 @@ static int nt36532e_prepare(struct drm_panel *panel)
 	return 0;
 }
 
+static int nt36532e_enable(struct drm_panel *panel)
+{
+	struct panel_info *pinfo = to_panel_info(panel);
+	struct mipi_dsi_multi_context dsi_ctx = { .dsi = pinfo->dsi[0] };
+
+	/* 等显示控制器准备好扫描输出后再点亮面板。 */
+	mipi_dsi_dcs_set_display_on_multi(&dsi_ctx);
+
+	return dsi_ctx.accum_err;
+}
+
 static int nt36532e_disable(struct drm_panel *panel)
 {
 	struct panel_info *pinfo = to_panel_info(panel);
@@ -428,6 +437,7 @@ static enum drm_panel_orientation nt36532e_get_orientation(struct drm_panel *pan
 
 static const struct drm_panel_funcs nt36532e_panel_funcs = {
 	.disable = nt36532e_disable,
+	.enable = nt36532e_enable,
 	.prepare = nt36532e_prepare,
 	.unprepare = nt36532e_unprepare,
 	.get_modes = nt36532e_get_modes,
