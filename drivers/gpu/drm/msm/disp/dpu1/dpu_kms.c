@@ -11,6 +11,7 @@
 
 #include <linux/debugfs.h>
 #include <linux/dma-buf.h>
+#include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/pm_opp.h>
 
@@ -57,6 +58,45 @@ module_param(dpu_use_virtual_planes, bool, 0);
 
 static int dpu_kms_hw_init(struct msm_kms *kms);
 static void _dpu_kms_mmu_destroy(struct dpu_kms *dpu_kms);
+
+static void dpu_kms_log_sheng_handoff(struct dpu_kms *dpu_kms,
+				      const char *stage)
+{
+	const struct dpu_mdss_cfg *catalog = dpu_kms->catalog;
+	int i;
+
+	if (!of_machine_is_compatible("xiaomi,sheng"))
+		return;
+
+	/* Read only: compare firmware scanout with Linux's initial DPU state.
+	 * Register offsets match dpu_hw_ctl.c and dpu_hw_intf.c.
+	 */
+	for (i = 0; i < catalog->ctl_count; i++) {
+		const struct dpu_ctl_cfg *ctl = &catalog->ctl[i];
+		void __iomem *base = dpu_kms->mmio + ctl->base;
+
+		dev_info(&dpu_kms->pdev->dev,
+			 "handoff %s %s: t=%08x s=%08x f=%08x i=%08x p=%08x l=%08x m=%08x\n",
+			 stage, ctl->name, readl_relaxed(base + 0x014),
+			 readl_relaxed(base + 0x01c), readl_relaxed(base + 0x0fc),
+			 readl_relaxed(base + 0x0f4), readl_relaxed(base + 0x12c),
+			 readl_relaxed(base + 0x130), readl_relaxed(base + 0x134));
+	}
+
+	for (i = 0; i < catalog->intf_count; i++) {
+		const struct dpu_intf_cfg *intf = &catalog->intf[i];
+		void __iomem *base;
+
+		if (intf->type != INTF_DSI)
+			continue;
+
+		base = dpu_kms->mmio + intf->base;
+		dev_info(&dpu_kms->pdev->dev,
+			 "handoff %s %s: config=%08x status=%08x\n",
+			 stage, intf->name, readl_relaxed(base + 0x004),
+			 readl_relaxed(base + 0x26c));
+	}
+}
 
 #ifdef CONFIG_DEBUG_FS
 static int _dpu_danger_signal_status(struct seq_file *s,
@@ -1173,6 +1213,7 @@ static int dpu_kms_hw_init(struct msm_kms *kms)
 		rc = -EINVAL;
 		goto err_pm_put;
 	}
+	dpu_kms_log_sheng_handoff(dpu_kms, "before-init");
 
 	/*
 	 * Now we need to read the HW catalog and initialize resources such as
@@ -1202,6 +1243,7 @@ static int dpu_kms_hw_init(struct msm_kms *kms)
 		DPU_ERROR("rm init failed: %d\n", rc);
 		goto err_pm_put;
 	}
+	dpu_kms_log_sheng_handoff(dpu_kms, "after-rm-init");
 
 	dpu_kms->hw_mdp = dpu_hw_mdptop_init(dev,
 					     dpu_kms->catalog->mdp,
