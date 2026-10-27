@@ -7,6 +7,7 @@
 
 #include <linux/backlight.h>
 #include <linux/delay.h>
+#include <linux/efi.h>
 #include <linux/gpio/consumer.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -35,6 +36,7 @@ struct panel_info {
 
 	struct gpio_desc *reset_gpio;
 	struct regulator_bulk_data supplies[3];
+	bool preserve_efi_handoff;
 };
 
 struct panel_desc {
@@ -339,7 +341,12 @@ static int nt36532e_prepare(struct drm_panel *panel)
 		return ret;
 	}
 
-	nt36532e_reset(pinfo);
+	if (pinfo->preserve_efi_handoff) {
+		pinfo->preserve_efi_handoff = false;
+		dev_info(panel->dev, "preserving EFI panel reset state on first prepare\n");
+	} else {
+		nt36532e_reset(pinfo);
+	}
 
 	ret = pinfo->desc->init_sequence(pinfo);
 	if (ret < 0) {
@@ -466,7 +473,10 @@ static int nt36532e_probe(struct mipi_dsi_device *dsi)
 	if (ret < 0)
 		return dev_err_probe(dev, ret, "failed to get regulators\n");
 
-	pinfo->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	/* Keep the bootloader's active panel state for the first EFI handoff. */
+	pinfo->preserve_efi_handoff = efi_enabled(EFI_BOOT);
+	pinfo->reset_gpio = devm_gpiod_get(dev, "reset",
+		pinfo->preserve_efi_handoff ? GPIOD_ASIS : GPIOD_OUT_HIGH);
 	if (IS_ERR(pinfo->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(pinfo->reset_gpio), "failed to get reset gpio\n");
 
