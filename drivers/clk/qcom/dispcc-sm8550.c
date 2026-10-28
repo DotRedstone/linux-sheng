@@ -1773,29 +1773,6 @@ static const struct of_device_id disp_cc_sm8550_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, disp_cc_sm8550_match_table);
 
-static void disp_cc_sheng_trace(struct device *dev, struct regmap *regmap,
-				const char *phase)
-{
-	static const unsigned int offsets[] = {
-		0x0000, 0x0004, 0x0010, 0x1000, 0x1004, 0x1010,
-		0x80d8, 0x80dc, 0x8108, 0x810c, DISP_CC_MISC_CMD,
-	};
-	unsigned int values[ARRAY_SIZE(offsets)];
-	unsigned int i;
-
-	for (i = 0; i < ARRAY_SIZE(offsets); i++) {
-		if (regmap_read(regmap, offsets[i], &values[i])) {
-			dev_warn(dev, "sheng dispcc %s: failed to read register %#x\n",
-				 phase, offsets[i]);
-			return;
-		}
-	}
-
-	dev_info(dev, "sheng dispcc %s: pll0=%08x/%08x/%08x pll1=%08x/%08x/%08x mdp=%08x/%08x byte0=%08x/%08x misc=%08x\n",
-		 phase, values[0], values[1], values[2], values[3], values[4],
-		 values[5], values[6], values[7], values[8], values[9], values[10]);
-}
-
 static int disp_cc_sm8550_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
@@ -1816,7 +1793,6 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 		ret = PTR_ERR(regmap);
 		goto err_put_rpm;
 	}
-	disp_cc_sheng_trace(&pdev->dev, regmap, "mapped");
 
 	if (of_device_is_compatible(pdev->dev.of_node, "qcom,sm8650-dispcc")) {
 		lucid_ole_vco[0].max_freq = 2100000000;
@@ -1836,22 +1812,17 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 		&disp_cc_mdss_mdp_clk_src_default_init;
 
 	/* 保留固件正在使用的 PLL0，直到显示驱动完成接管。 */
-	if (sheng &&
-	    !regmap_read(regmap, 0x0, &pll0_mode) &&
-	    !regmap_read(regmap, 0x4, &pll0_opmode) &&
-	    (pll0_mode & BIT(0)) && (pll0_opmode & BIT(0))) {
-		dev_info(&pdev->dev, "sheng dispcc: preserve running pll0 at probe\n");
-	} else {
+	if (!sheng ||
+	    regmap_read(regmap, 0x0, &pll0_mode) ||
+	    regmap_read(regmap, 0x4, &pll0_opmode) ||
+	    !(pll0_mode & BIT(0)) || !(pll0_opmode & BIT(0))) {
 		clk_lucid_ole_pll_configure(&disp_cc_pll0, regmap,
 					   &disp_cc_pll0_config);
 	}
-	disp_cc_sheng_trace(&pdev->dev, regmap, "pll0");
 	clk_lucid_ole_pll_configure(&disp_cc_pll1, regmap, &disp_cc_pll1_config);
-	disp_cc_sheng_trace(&pdev->dev, regmap, "pll1");
 
 	/* Enable clock gating for MDP clocks */
 	regmap_update_bits(regmap, DISP_CC_MISC_CMD, 0x10, 0x10);
-	disp_cc_sheng_trace(&pdev->dev, regmap, "gating");
 
 	/* Keep some clocks always-on */
 	qcom_branch_set_clk_en(regmap, 0xe054); /* DISP_CC_XO_CLK */
@@ -1859,7 +1830,6 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 	ret = qcom_cc_really_probe(&pdev->dev, &disp_cc_sm8550_desc, regmap);
 	if (ret)
 		goto err_put_rpm;
-	disp_cc_sheng_trace(&pdev->dev, regmap, "registered");
 
 	pm_runtime_put(&pdev->dev);
 
