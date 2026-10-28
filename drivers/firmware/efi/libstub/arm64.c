@@ -40,14 +40,22 @@ void efi_sheng_phase_probe_init(const struct screen_info *si)
 void efi_sheng_phase_probe_mark(u32 color, bool boot_services_available)
 {
 	u64 start, ticks;
-	unsigned long i;
+	unsigned long addr, end, i, lsize;
 
 	if (!sheng_phase_fb)
 		return;
 
 	for (i = 0; i < sheng_phase_pixels; i++)
 		WRITE_ONCE(sheng_phase_fb[i], color);
-	asm volatile("dsb sy" ::: "memory");
+
+	/* U-Boot maps the hand-off framebuffer cacheably; make each mark visible. */
+	lsize = 4 << cpuid_feature_extract_unsigned_field(
+		read_cpuid_effective_cachetype(), CTR_EL0_DminLine_SHIFT);
+	addr = (unsigned long)sheng_phase_fb & ~(lsize - 1);
+	end = (unsigned long)(sheng_phase_fb + sheng_phase_pixels);
+	for (; addr < end; addr += lsize)
+		asm volatile("dc cvac, %0" :: "r"(addr) : "memory");
+	dsb(sy);
 
 	if (boot_services_available) {
 		efi_bs_call(stall, 2 * EFI_USEC_PER_SEC);
