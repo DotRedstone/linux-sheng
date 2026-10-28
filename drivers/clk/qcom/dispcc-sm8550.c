@@ -612,20 +612,29 @@ static const struct freq_tbl ftbl_disp_cc_mdss_mdp_clk_src_sm8650[] = {
 	{ }
 };
 
+static const struct clk_init_data disp_cc_mdss_mdp_clk_src_default_init = {
+	.name = "disp_cc_mdss_mdp_clk_src",
+	.parent_data = disp_cc_parent_data_8,
+	.num_parents = ARRAY_SIZE(disp_cc_parent_data_8),
+	.flags = CLK_SET_RATE_PARENT,
+	.ops = &clk_rcg2_shared_ops,
+};
+
+static const struct clk_init_data disp_cc_mdss_mdp_clk_src_sheng_init = {
+	.name = "disp_cc_mdss_mdp_clk_src",
+	.parent_data = disp_cc_parent_data_8,
+	.num_parents = ARRAY_SIZE(disp_cc_parent_data_8),
+	.flags = CLK_SET_RATE_PARENT,
+	.ops = &clk_rcg2_shared_no_init_park_ops,
+};
+
 static struct clk_rcg2 disp_cc_mdss_mdp_clk_src = {
 	.cmd_rcgr = 0x80d8,
 	.mnd_width = 0,
 	.hid_width = 5,
 	.parent_map = disp_cc_parent_map_8,
 	.freq_tbl = ftbl_disp_cc_mdss_mdp_clk_src,
-	.clkr.hw.init = &(const struct clk_init_data) {
-		.name = "disp_cc_mdss_mdp_clk_src",
-		.parent_data = disp_cc_parent_data_8,
-		.num_parents = ARRAY_SIZE(disp_cc_parent_data_8),
-		.flags = CLK_SET_RATE_PARENT,
-		/* Preserve the active boot display source until DRM takes over. */
-		.ops = &clk_rcg2_shared_no_init_park_ops,
-	},
+	.clkr.hw.init = &disp_cc_mdss_mdp_clk_src_default_init,
 };
 
 static struct clk_rcg2 disp_cc_mdss_pclk0_clk_src = {
@@ -1791,6 +1800,7 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
 	unsigned int pll0_mode, pll0_opmode;
+	bool sheng = of_machine_is_compatible("xiaomi,sheng");
 	int ret;
 
 	ret = devm_pm_runtime_enable(&pdev->dev);
@@ -1820,9 +1830,13 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 		disp_cc_pll1_config.user_ctl_val = 0x1;
 		disp_cc_mdss_mdp_clk_src.freq_tbl = ftbl_disp_cc_mdss_mdp_clk_src_sar2130p;
 	}
+	/* Sheng 的 EFI 路径会留下正在运行的 MDP 时钟源。 */
+	disp_cc_mdss_mdp_clk_src.clkr.hw.init = sheng ?
+		&disp_cc_mdss_mdp_clk_src_sheng_init :
+		&disp_cc_mdss_mdp_clk_src_default_init;
 
-	/* Keep the firmware's live MDP clock until the display driver takes over. */
-	if (of_machine_is_compatible("xiaomi,sheng") &&
+	/* 保留固件正在使用的 PLL0，直到显示驱动完成接管。 */
+	if (sheng &&
 	    !regmap_read(regmap, 0x0, &pll0_mode) &&
 	    !regmap_read(regmap, 0x4, &pll0_opmode) &&
 	    (pll0_mode & BIT(0)) && (pll0_opmode & BIT(0))) {
