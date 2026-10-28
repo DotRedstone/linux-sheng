@@ -298,7 +298,7 @@ efi_status_t allocate_new_fdt_and_exit_boot(void *handle,
 		efi_set_virtual_address_map_t *svam;
 
 #ifdef CONFIG_ARM64
-		efi_sheng_phase_probe_mark(0x0000ffff, false);
+		efi_sheng_phase_probe_mark(0x00102040, false);
 #endif
 		if (efi_novamap)
 			return EFI_SUCCESS;
