@@ -8,12 +8,58 @@
 
 
 #include <linux/efi.h>
+#include <linux/screen_info.h>
 #include <asm/efi.h>
 #include <asm/image.h>
 #include <asm/memory.h>
 #include <asm/sysreg.h>
 
 #include "efistub.h"
+
+static u32 *sheng_phase_fb;
+static unsigned long sheng_phase_pixels;
+
+void efi_sheng_phase_probe_init(const struct screen_info *si)
+{
+	unsigned long size;
+
+	/* This experiment is limited to Sheng's known 32-bit GOP mode. */
+	if (si->orig_video_isVGA != VIDEO_TYPE_EFI ||
+	    si->lfb_width != 3048 || si->lfb_height != 2032 ||
+	    si->lfb_depth != 32 || si->lfb_linelength != 3048 * 4)
+		return;
+
+	size = (unsigned long)si->lfb_linelength * si->lfb_height;
+	if (si->lfb_size < size || !__screen_info_lfb_base(si))
+		return;
+
+	sheng_phase_fb = (u32 *)(unsigned long)__screen_info_lfb_base(si);
+	sheng_phase_pixels = size / sizeof(u32);
+}
+
+void efi_sheng_phase_probe_mark(u32 color, bool boot_services_available)
+{
+	u64 start, ticks;
+	unsigned long i;
+
+	if (!sheng_phase_fb)
+		return;
+
+	for (i = 0; i < sheng_phase_pixels; i++)
+		WRITE_ONCE(sheng_phase_fb[i], color);
+	asm volatile("dsb sy" ::: "memory");
+
+	if (boot_services_available) {
+		efi_bs_call(stall, 2 * EFI_USEC_PER_SEC);
+		return;
+	}
+
+	/* Boot services are gone; use the architectural counter for the last mark. */
+	ticks = read_sysreg(cntfrq_el0) * 2;
+	start = read_sysreg(cntvct_el0);
+	while (read_sysreg(cntvct_el0) - start < ticks)
+		asm volatile("yield");
+}
 
 static bool system_needs_vamap(void)
 {

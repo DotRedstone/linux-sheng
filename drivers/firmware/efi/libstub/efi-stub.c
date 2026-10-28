@@ -164,6 +164,13 @@ efi_status_t efi_stub_common(efi_handle_t handle,
 
 	dpy = setup_primary_display();
 
+#ifdef CONFIG_ARM64
+	if (dpy && strstr(cmdline_ptr, "sheng.efi-phase-probe=1")) {
+		efi_sheng_phase_probe_init(&dpy->screen);
+		efi_sheng_phase_probe_mark(0x0000ff00, true);
+	}
+#endif
+
 	efi_retrieve_eventlog();
 
 	/* Ask the firmware to clear memory on unclean shutdown */

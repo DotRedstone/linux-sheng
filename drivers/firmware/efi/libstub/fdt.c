@@ -289,11 +289,17 @@ efi_status_t allocate_new_fdt_and_exit_boot(void *handle,
 
 	priv.new_fdt_addr = (void *)*new_fdt_addr;
 
+#ifdef CONFIG_ARM64
+	efi_sheng_phase_probe_mark(0x00ff00ff, true);
+#endif
 	status = efi_exit_boot_services(handle, &priv, exit_boot_func);
 
 	if (status == EFI_SUCCESS) {
 		efi_set_virtual_address_map_t *svam;
 
+#ifdef CONFIG_ARM64
+		efi_sheng_phase_probe_mark(0x0000ffff, false);
+#endif
 		if (efi_novamap)
 			return EFI_SUCCESS;
 

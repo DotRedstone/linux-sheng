@@ -38,6 +38,11 @@ struct edid_info;
 struct screen_info;
 struct sysfb_display_info;
 
+#ifdef CONFIG_ARM64
+void efi_sheng_phase_probe_init(const struct screen_info *si);
+void efi_sheng_phase_probe_mark(u32 color, bool boot_services_available);
+#endif
+
 extern bool efi_no5lvl;
 extern bool efi_nochunk;
 extern bool efi_nokaslr;
