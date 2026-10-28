@@ -8,6 +8,7 @@
 #include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/pm_runtime.h>
@@ -1788,6 +1789,7 @@ static void disp_cc_sheng_trace(struct device *dev, struct regmap *regmap,
 static int disp_cc_sm8550_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
+	unsigned int pll0_mode, pll0_opmode;
 	int ret;
 
 	ret = devm_pm_runtime_enable(&pdev->dev);
@@ -1818,7 +1820,16 @@ static int disp_cc_sm8550_probe(struct platform_device *pdev)
 		disp_cc_mdss_mdp_clk_src.freq_tbl = ftbl_disp_cc_mdss_mdp_clk_src_sar2130p;
 	}
 
-	clk_lucid_ole_pll_configure(&disp_cc_pll0, regmap, &disp_cc_pll0_config);
+	/* Keep the firmware's live MDP clock until the display driver takes over. */
+	if (of_machine_is_compatible("xiaomi,sheng") &&
+	    !regmap_read(regmap, 0x0, &pll0_mode) &&
+	    !regmap_read(regmap, 0x4, &pll0_opmode) &&
+	    (pll0_mode & BIT(0)) && (pll0_opmode & BIT(0))) {
+		dev_info(&pdev->dev, "sheng dispcc: preserve running pll0 at probe\n");
+	} else {
+		clk_lucid_ole_pll_configure(&disp_cc_pll0, regmap,
+					   &disp_cc_pll0_config);
+	}
 	disp_cc_sheng_trace(&pdev->dev, regmap, "pll0");
 	clk_lucid_ole_pll_configure(&disp_cc_pll1, regmap, &disp_cc_pll1_config);
 	disp_cc_sheng_trace(&pdev->dev, regmap, "pll1");
